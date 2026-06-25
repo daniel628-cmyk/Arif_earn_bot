@@ -1,45 +1,88 @@
-import os
-import asyncio
+import logging
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
+from supabase import create_client
 
-# ከ Railway Variables ቶከኑን ይወስዳል
-TOKEN = os.getenv('API_TOKEN')
-bot = Bot(token=TOKEN)
+# ማዋቀር
+API_TOKEN = 'YOUR_BOT_TOKEN'
+SUPABASE_URL = 'YOUR_SUPABASE_URL'
+SUPABASE_KEY = 'YOUR_SUPABASE_KEY'
+
+bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# የታችኛው ሜኑ አዝራሮች (Reply Keyboard)
-def main_menu():
-    keyboard = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="📢 Join Channels"), KeyboardButton(text="🤖 Join Bots"), KeyboardButton(text="📺 Watch Ads")],
-            [KeyboardButton(text="💸 Withdraw"), KeyboardButton(text="💰 Balance"), KeyboardButton(text="ℹ️ Info")],
-            [KeyboardButton(text="👥 Referrals"), KeyboardButton(text="📢 Advertise")]
-        ],
-        resize_keyboard=True
-    )
-    return keyboard
+# --- 1. ዋናው ሜኑ አዝራሮች (Main Menu) ---
+def get_main_menu():
+    builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="📢 Join Channels"), KeyboardButton(text="🤖 Join Bots"))
+    builder.row(KeyboardButton(text="💰 Balance"), KeyboardButton(text="💸 Withdraw"))
+    builder.row(KeyboardButton(text="📢 Advertise"))
+    return builder.as_markup(resize_keyboard=True)
 
-# /start ሲሉ የሚሰጠው ምላሽ
+# --- 2. Welcome Message ---
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
-    welcome_text = (
-        "🎉 እንኳን ወደ Arif Earning Bot በሰላም መጡ::\n\n"
-        "ይህ ቦት ቀላል ስራዎችን በመስራት ብር እንዲያገኙ ያስችልዎታል::\n\n"
-        "📢 Join Channels - ቻናሎችን በመቀላቀል ብር ይስሩ\n"
-        "🤖 Join Bots - ቦቶችን በመቀላቀል ብር ይስሩ\n\n"
-        "እንዲሁም የራስዎን ማስታወቂያዎች /advertise ብለው ማስተዋወቅ ይችላሉ::"
+    # ተጠቃሚውን ዳታቤዝ ውስጥ አስመዝግበው (ካሌለ)
+    user_id = message.from_user.id
+    check_user = supabase.table("users").select("user_id").eq("user_id", user_id).execute()
+    
+    if len(check_user.data) == 0:
+        supabase.table("users").insert({"user_id": user_id, "balance": 0.0}).execute()
+        
+    await message.answer(
+        f"ሰላም {message.from_user.first_name}!\n\n"
+        "ወደ Arif Earning Bot እንኳን በደህና መጡ! ቻናሎችን እና ቦቶችን በመቀላቀል ገንዘብ ማግኘት ይጀምሩ።",
+        reply_markup=get_main_menu()
     )
-    await message.answer(welcome_text, reply_markup=main_menu())
 
-# አዝራሮቹ ሲጫኑ የሚሰጡ ምላሾች (ለምሳሌ)
-@dp.message(F.text == "💰 Balance")
-async def balance_handler(message: types.Message):
-    await message.answer("የእርስዎ አሁን ያለው ሂሳብ 0 ብር ነው።")
+# --- 3. Join Channels Handler ---
+@dp.message(F.text == "📢 Join Channels")
+async def show_tasks(message: types.Message):
+    tasks = supabase.table("tasks").select("*").eq("task_type", "channel").execute().data
+    if not tasks:
+        await message.answer("❌ በአሁኑ ሰዓት የሚገኙ ስራዎች የሉም።")
+        return
 
-async def main():
-    await dp.start_polling(bot)
+    builder = InlineKeyboardBuilder()
+    for task in tasks:
+        builder.row(InlineKeyboardButton(text=f"✅ {task['task_name']} (0.25 ብር)", callback_data=f"join_{task['task_id']}"))
+    await message.answer("📢 የሚከተሉትን ቻናሎች ይቀላቀሉ፦", reply_markup=builder.as_markup())
 
-if __name__ == "__main__":
-    asyncio.run(main())
+# --- 4. Verify Task (የጋራ የክፍያ ማረጋገጫ) ---
+@dp.callback_query(F.data.startswith("join_"))
+async def join_task(callback: types.CallbackQuery):
+    task_id = callback.data.split("_")[1]
+    task = supabase.table("tasks").select("*").eq("task_id", task_id).execute().data[0]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔗 ሊንኩን ይክፈቱ", url=task['target_link'])],
+        [InlineKeyboardButton(text="✅ አድርጌያለሁ", callback_data=f"check_{task_id}")]
+    ])
+    await callback.message.answer(f"ተልዕኮ: {task['task_name']}\nቻናሉን ይቀላቀሉና 'አድርጌያለሁ' ይጫኑ።", reply_markup=keyboard)
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("check_"))
+async def verify_task(callback: types.CallbackQuery):
+    task_id = int(callback.data.split("_")[1])
+    user_id = callback.from_user.id
+    task = supabase.table("tasks").select("*").eq("task_id", task_id).execute().data[0]
+    
+    try:
+        chat_member = await bot.get_chat_member(chat_id=task['target_link'], user_id=user_id)
+        if chat_member.status in ['member', 'administrator', 'creator']:
+            # ባላንስ ማዘመን
+            user = supabase.table("users").select("balance").eq("user_id", user_id).execute().data[0]
+            new_balance = user['balance'] + 0.25
+            supabase.table("users").update({"balance": new_balance}).eq("user_id", user_id).execute()
+            supabase.table("user_tasks").insert({"user_id": user_id, "task_id": task_id, "status": "active"}).execute()
+            await callback.message.answer("✅ ስኬታማ! 0.25 ብር ተሞልቶልዎታል።")
+        else:
+            await callback.message.answer("❌ ቻናሉን አልተቀላቀሉም።")
+    except Exception:
+        await callback.message.answer("⚠️ ስህተት ተፈጥሯል፣ የቦቱን አድሚንነት ያረጋግጡ።")
+    await callback.answer()
+
+if __name__ == '__main__':
+    dp.run_polling(bot)
