@@ -1,25 +1,21 @@
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+import asyncio
 
-# በ Railway Variables ውስጥ ያስገባኸው የዳታቤዝ ሊንክ (DATABASE_URL)
-DATABASE_URL = os.getenv('DATABASE_URL')
+# የቦትህን Token እዚህ አስገባ
+API_TOKEN = 'YOUR_BOT_TOKEN_HERE'
 
-# የዳታቤዝ ግንኙነትን የሚፈጥር ኮድ
-# Supabase ለሚጠቀም PostgreSQL የ SSL ግንኙነት የግድ ያስፈልጋል
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"sslmode": "require"},  # ግንኙነቱን ደህንነቱ የተጠበቀ ያደርገዋል
-    pool_pre_ping=True,                  # ግንኙነት ቢቋረጥ ቦቱ ራሱ እንዲያስተካክል ይረዳል
-    pool_recycle=1800                    # ግንኙነቱን በየ30 ደቂቃው ያድሰዋል
-)
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher()
 
-# ዳታቤዝን ለማንበብ ወይም ለመጻፍ የሚያስችል ክፍለ ጊዜ (Session)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# /start ሲሉ የሚቀበለው ኮድ
+@dp.message(Command("start"))
+async def cmd_start(message: types.Message):
+    await message.answer("እንኳን ደህና መጣህ ወደ Arif Earning ቦት! \n\nእንዴት ልረዳህ እችላለሁ?")
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# ቦቱን የሚያስጀምር ዋናው ክፍል
+async def main():
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
