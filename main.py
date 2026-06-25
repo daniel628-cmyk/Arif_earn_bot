@@ -2,17 +2,18 @@ import asyncio
 import os
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy import create_engine, Column, Integer, String, BigInteger
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# 1. የዳታቤዝ ግንኙነት (ከ Railway Variables የሚወሰድ)
+# 1. የዳታቤዝ ግንኙነት (ከ Railway Variables)
 DATABASE_URL = os.getenv('DATABASE_URL')
 engine = create_engine(DATABASE_URL)
 Base = declarative_base()
 Session = sessionmaker(bind=engine)
 session = Session()
 
-# 2. የጠረጴዛ መዋቅር (Table Schema)
+# 2. የጠረጴዛ መዋቅር
 class User(Base):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True)
@@ -21,14 +22,34 @@ class User(Base):
 
 Base.metadata.create_all(engine)
 
-# 3. ቦቱን ማዋቀር
-API_TOKEN = os.getenv('BOT_TOKEN') # በRailway ላይ ታስገባዋለህ
+# 3. የቦት ማዋቀር
+API_TOKEN = os.getenv('BOT_TOKEN')
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
-# 4. ትዕዛዞች
+# 4. ዋና ሜኑ (Buttons)
+def get_main_menu():
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📢 Join Channels", callback_data="join_channels"),
+            InlineKeyboardButton(text="🤖 Join Bots", callback_data="join_bots")
+        ],
+        [InlineKeyboardButton(text="📺 Watch Ads", callback_data="watch_ads")],
+        [
+            InlineKeyboardButton(text="📤 Withdraw", callback_data="withdraw"),
+            InlineKeyboardButton(text="💰 Balance", callback_data="balance")
+        ],
+        [InlineKeyboardButton(text="ℹ️ Info", callback_data="info")],
+        [
+            InlineKeyboardButton(text="👥 Referrals", callback_data="referrals"),
+            InlineKeyboardButton(text="📈 Advertise", callback_data="advertise")
+        ]
+    ])
+    return keyboard
+
+# 5. የሰላምታ ክፍል
 @dp.message(Command("start"))
-async def start(message: types.Message):
+async def start_handler(message: types.Message):
     # ተጠቃሚን መመዝገብ
     user_id = message.from_user.id
     if not session.query(User).filter_by(telegram_id=user_id).first():
@@ -36,14 +57,22 @@ async def start(message: types.Message):
         session.add(new_user)
         session.commit()
     
-    await message.answer("እንኳን ወደ ቦቱ በደህና መጡ! ሂሳብዎን ለማየት /balance ይጫኑ።")
+    welcome_text = (
+        "🎉 እንኳን ወደ Arif Earning Bot በሰላም መጡ::\n\n"
+        "ይህ ቦት ቀላል ስራዎችን በመስራት ብር እንዲያገኙ ይረዳዎታል::\n\n"
+        "📢 Join Channels - ቻናሎችን በመቀላቀል ብር ይስሩ\n"
+        "🤖 Join Bots - ቦቶችን በመጠቀም ብር ይስሩ\n\n"
+        "እንዲሁም የራስዎን ማስታወቂያዎች /advertise ብለው ማስተዋወቅ ይችላሉ::"
+    )
+    await message.answer(welcome_text, reply_markup=get_main_menu())
 
-@dp.message(Command("balance"))
-async def get_balance(message: types.Message):
-    user = session.query(User).filter_by(telegram_id=message.from_user.id).first()
-    await message.answer(f"የእርስዎ ቀሪ ሂሳብ: {user.balance} ብር ነው::")
+# 6. የሂሳብ ማሳያ ክፍል
+@dp.callback_query(F.data == "balance")
+async def check_balance(callback: types.CallbackQuery):
+    user = session.query(User).filter_by(telegram_id=callback.from_user.id).first()
+    await callback.message.answer(f"የእርስዎ ቀሪ ሂሳብ: {user.balance} ብር ነው::")
 
-# 5. ቦቱን ማስጀመር
+# 7. ቦቱን ማስጀመር
 async def main():
     await dp.start_polling(bot)
 
