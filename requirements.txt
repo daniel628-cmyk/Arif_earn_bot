@@ -1,3 +1,2 @@
-aiogram
 sqlalchemy
 psycopg2-binary
