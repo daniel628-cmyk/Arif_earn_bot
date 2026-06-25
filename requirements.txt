@@ -1,3 +1,5 @@
 aiogram
 sqlalchemy
 psycopg2-binary
+supabase
+pip install aiogram supabase
