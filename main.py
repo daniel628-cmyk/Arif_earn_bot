@@ -1,21 +1,17 @@
 import os
-import psycopg
+import psycopg2
 import telebot
 from telebot import types
 import time
 
-# --- የቦት Token እና የአድሚን ID ---
 TOKEN = os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 ADMIN_ID = 5544893200  
-
-# --- የ PostgreSQL ግንኙነት (Neon.tech) ---
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def get_db_connection():
-    return psycopg.connect(DATABASE_URL, sslmode='require')
+    return psycopg2.connect(DATABASE_URL, sslmode='require')
 
-# --- ሰንጠረዦችን መፍጠር (Database Init) ---
 def init_db():
     conn = None
     try:
@@ -46,7 +42,6 @@ def init_db():
                 )
             ''')
             conn.commit()
-        print("Database initialized successfully.")
     except Exception as e:
         print(f"Database init error: {e}")
     finally:
@@ -55,7 +50,6 @@ def init_db():
 
 init_db()
 
-# --- የዳታቤዝ ተግባራት ---
 def get_user(user_id):
     conn = None
     res = None
@@ -176,7 +170,6 @@ def mark_task_completed(user_id, task_id):
         if conn:
             conn.close()
 
-# --- የዋናው ማውጫ ቁልፎች ---
 def main_menu_keyboard():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     btn1 = types.KeyboardButton("👤 My Account")
@@ -187,7 +180,6 @@ def main_menu_keyboard():
     markup.add(btn1, btn2, btn3, btn4, btn5)
     return markup
 
-# --- 1. /start Command ---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_id = message.chat.id
@@ -209,7 +201,7 @@ def send_welcome(message):
                 except Exception:
                     pass
     except Exception as e:
-        print(f"Error in start command: {e}")
+        print(f"Error in start: {e}")
     welcome_text = (
         f"🌟 👋 **እንኳን ወደ {bot.get_me().first_name} በደህና መጡ!** 🌟\n\n"
         "ይህ ቦት ቻናሎችን እና ቦቶችን Join በማድረግ እንዲሁም ጓደኞችዎን በመጋበዝ "
@@ -218,7 +210,6 @@ def send_welcome(message):
     )
     bot.send_message(user_id, welcome_text, parse_mode='Markdown', reply_markup=main_menu_keyboard())
 
-# --- 2. My Account ---
 @bot.message_handler(func=lambda m: m.text == "👤 My Account")
 def my_account(message):
     user_id = message.chat.id
@@ -235,7 +226,6 @@ def my_account(message):
         )
         bot.send_message(user_id, account_text, parse_mode='Markdown')
 
-# --- 3. Invite Link ---
 @bot.message_handler(func=lambda m: m.text == "🔗 Invite Link")
 def invite_link(message):
     user_id = message.chat.id
@@ -248,7 +238,6 @@ def invite_link(message):
     )
     bot.send_message(user_id, invite_text, parse_mode='Markdown')
 
-# --- 4. Join Channels ---
 @bot.message_handler(func=lambda m: m.text == "📢 Join Channels")
 def join_channels(message):
     user_id = message.chat.id
@@ -283,13 +272,11 @@ def verify_task(call):
     except Exception:
         bot.answer_callback_query(call.id, "❌ ስህተት ተፈጥሯል!")
 
-# --- 5. Promote ---
 @bot.message_handler(func=lambda m: m.text == "🚀 Promote (ማስታወቂያ)")
 def promote_panel(message):
     promote_text = "🚀 **የእርስዎን ቻናል ማስተዋወቅ ይፈልጋሉ?**\n\n👇 አድሚኑን ያነጋግሩ፦\n👉 @th_ug_life"
     bot.send_message(message.chat.id, promote_text, parse_mode='Markdown')
 
-# --- 6. Withdraw ---
 @bot.message_handler(func=lambda m: m.text == "📥 Withdraw")
 def process_withdraw(message):
     user_id = message.chat.id
@@ -332,7 +319,6 @@ def handle_withdraw_amount(message):
     else:
         bot.send_message(user_id, "❌ ስህተት ተፈጥሯል! በቂ ገንዘብ እንዳለዎት ያረጋግጡ።", reply_markup=main_menu_keyboard())
 
-# --- 7. Admin Add Task ---
 @bot.message_handler(commands=['add_task'])
 def admin_add_task(message):
     if message.chat.id == ADMIN_ID:
