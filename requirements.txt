@@ -1,5 +1,3 @@
-aiogram
-sqlalchemy
-psycopg2-binary
+aiogram==3.x.x
 supabase
-pip install aiogram supabase
+python-dotenv
