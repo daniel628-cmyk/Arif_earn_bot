@@ -326,7 +326,7 @@ def handle_withdraw_amount(message):
     amount = float(amount_text)
     success, phone = request_withdrawal(user_id, amount)
     if success:
-        bot.send_message(user_id, "✅ **የክክፍያ ጥያቄዎ በተሳካ ሁኔታ ለአድሚን ተልኳል!**", reply_markup=main_menu_keyboard())
+        bot.send_message(user_id, "✅ **የክፍያ ጥያቄዎ በተሳካ ሁኔታ ለአድሚን ተልኳል!**", reply_markup=main_menu_keyboard())
         admin_text = f"🚨 **አዲስ የክፍያ ጥያቄ!**\n\n👤 ID: `{user_id}`\n📞 ስልክ: `{phone}`\n💰 መጠን: **{amount} ብር**"
         bot.send_message(ADMIN_ID, admin_text, parse_mode="Markdown")
     else:
