@@ -3,12 +3,18 @@ import os
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from sqlalchemy import create_engine, Column, Integer, String, BigInteger
+from sqlalchemy import create_engine, Column, Integer, BigInteger
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# 1. የዳታቤዝ ግንኙነት (ከ Railway Variables)
+# 1. የዳታቤዝ ግንኙነት ከ SSL ድጋፍ ጋር
 DATABASE_URL = os.getenv('DATABASE_URL')
-engine = create_engine(DATABASE_URL)
+# SSL connection ችግርን ለመፍታት connect_args እና pool ቅንብሮች ተጨምረዋል
+engine = create_engine(
+    DATABASE_URL, 
+    connect_args={"sslmode": "require"}, 
+    pool_pre_ping=True, 
+    pool_recycle=3600
+)
 Base = declarative_base()
 Session = sessionmaker(bind=engine)
 session = Session()
@@ -50,7 +56,6 @@ def get_main_menu():
 # 5. የሰላምታ ክፍል
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
-    # ተጠቃሚን መመዝገብ
     user_id = message.from_user.id
     if not session.query(User).filter_by(telegram_id=user_id).first():
         new_user = User(telegram_id=user_id, balance=0)
@@ -70,10 +75,14 @@ async def start_handler(message: types.Message):
 @dp.callback_query(F.data == "balance")
 async def check_balance(callback: types.CallbackQuery):
     user = session.query(User).filter_by(telegram_id=callback.from_user.id).first()
-    await callback.message.answer(f"የእርስዎ ቀሪ ሂሳብ: {user.balance} ብር ነው::")
+    balance = user.balance if user else 0
+    await callback.message.answer(f"የእርስዎ ቀሪ ሂሳብ: {balance} ብር ነው::")
+    await callback.answer()
 
 # 7. ቦቱን ማስጀመር
 async def main():
+    # ቦቱ በተመሳሳይ ሰዓት በሌላ ቦታ እንዳይሰራ ለማድረግ 
+    # ስልክህ ላይ ያለውን ቦት ሙሉ በሙሉ ማጥፋትህን አረጋግጥ
     await dp.start_polling(bot)
 
 if __name__ == '__main__':
