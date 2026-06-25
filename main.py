@@ -1,19 +1,18 @@
+import os
+import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-import asyncio
 
-# የቦትህን Token እዚህ አስገባ
-API_TOKEN = 'YOUR_BOT_TOKEN_HERE'
+# ቶከኑን ከ Railway Variables ይወስዳል
+TOKEN = os.getenv('API_TOKEN')
 
-bot = Bot(token=API_TOKEN)
+bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# /start ሲሉ የሚቀበለው ኮድ
 @dp.message(Command("start"))
-async def cmd_start(message: types.Message):
-    await message.answer("እንኳን ደህና መጣህ ወደ Arif Earning ቦት! \n\nእንዴት ልረዳህ እችላለሁ?")
+async def start_handler(message: types.Message):
+    await message.answer("እንኳን ደህና መጣህ ወደ Arif Earning ቦት!")
 
-# ቦቱን የሚያስጀምር ዋናው ክፍል
 async def main():
     await dp.start_polling(bot)
 
