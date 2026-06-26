@@ -3,71 +3,106 @@ import psycopg2
 import telebot
 from telebot import types
 
+# --- Configurations ---
 TOKEN = os.environ.get('BOT_TOKEN')
-bot = telebot.TeleBot(TOKEN)
-ADMIN_ID = 5544893200
+bot = telebot.TeleBot(TOKEN, threaded=False) # threaded=False ለሰርቨር የተረጋጋ ነው
+ADMIN_ID = 5544893200  
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
-def get_db():
+def get_db_connection():
+    # sslmode='require' ለ Railway ግዴታ ነው
     return psycopg2.connect(DATABASE_URL, sslmode='require')
 
-# --- Main Menu (Inline) ---
-def get_main_markup():
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    markup.add(
-        types.InlineKeyboardButton("👤 መለያዬ (Account)", callback_data="account"),
-        types.InlineKeyboardButton("📢 ስራዎች (Tasks)", callback_data="tasks"),
-        types.InlineKeyboardButton("🔗 መጋበዣ (Referral)", callback_data="referral"),
-        types.InlineKeyboardButton("📥 ክፍያ መጠየቅ (Withdraw)", callback_data="withdraw"),
-        types.InlineKeyboardButton("🚀 ማስታወቂያ (Advertising)", callback_data="promote")
-    )
-    return markup
+def init_db():
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("CREATE TABLE IF NOT EXISTS users (user_id BIGINT PRIMARY KEY, balance REAL DEFAULT 0.0, payout_balance REAL DEFAULT 0.0, invited_by BIGINT, phone_number TEXT)")
+            cur.execute("CREATE TABLE IF NOT EXISTS tasks (task_id SERIAL PRIMARY KEY, title TEXT, link TEXT, reward REAL DEFAULT 1.0)")
+            cur.execute("CREATE TABLE IF NOT EXISTS completed_tasks (user_id BIGINT, task_id INTEGER, PRIMARY KEY (user_id, task_id))")
+            conn.commit()
+    except Exception as e:
+        print(f"DB Init Error: {e}")
+    finally:
+        if conn: conn.close()
 
+init_db()
+
+# --- Helpers ---
+def get_user(uid):
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT balance, payout_balance, invited_by, phone_number FROM users WHERE user_id = %s", (uid,))
+            return cur.fetchone()
+    except Exception as e:
+        print(f"Get User Error: {e}")
+    finally:
+        if conn: conn.close()
+    return None
+
+def add_user(uid, ref=None):
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO users (user_id, invited_by) VALUES (%s, %s) ON CONFLICT (user_id) DO NOTHING", (uid, ref))
+            conn.commit()
+    except Exception as e:
+        print(f"Add User Error: {e}")
+    finally:
+        if conn: conn.close()
+
+def update_phone(uid, phone):
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET phone_number = %s WHERE user_id = %s", (phone, uid))
+            conn.commit()
+    except Exception as e:
+        print(f"Update Phone Error: {e}")
+    finally:
+        if conn: conn.close()
+
+# --- Handlers ---
 @bot.message_handler(commands=['start'])
 def start(m):
-    add_user(m.chat.id)
-    bot.send_message(m.chat.id, "🌟 ወደ Arif Earn በደህና መጡ! የሚፈልጉትን ይምረጡ፦", reply_markup=get_main_markup())
+    try:
+        uid = m.chat.id
+        args = m.text.split()
+        ref = int(args[1]) if len(args) > 1 and args[1].isdigit() else None
+        add_user(uid, ref)
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add("👤 My Account", "📥 Withdraw")
+        bot.send_message(uid, "እንኳን ደህና መጡ! 🌟", reply_markup=markup)
+    except Exception as e:
+        print(f"Start Error: {e}")
 
-# --- Callback Handlers ---
-@bot.callback_query_handler(func=lambda call: True)
-def callback_query(call):
-    if call.data == "account":
-        data = get_user(call.message.chat.id)
-        bot.edit_message_text(f"📋 **መረጃዎ**:\n💰 ሂሳብ: {data[1]} ብር\n👥 የጋበዙት: 0", 
-                              call.message.chat.id, call.message.message_id, reply_markup=get_main_markup())
-    
-    elif call.data == "tasks":
-        bot.edit_message_text("📢 **አሁን የሚገኙ ስራዎች**:\n(እዚህ ጋር ከ Database Task ይዘረዘራል)", 
-                              call.message.chat.id, call.message.message_id, reply_markup=get_main_markup())
-    
-    elif call.data == "referral":
-        link = f"https://t.me/{bot.get_me().username}?start={call.message.chat.id}"
-        bot.edit_message_text(f"🔗 **የእርስዎ መጋበዣ ሊንክ**:\n`{link}`\n\nለእያንዳንዱ ሰው 3 ብር ያገኛሉ!", 
-                              call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=get_main_markup())
-    
-    elif call.data == "withdraw":
-        bot.edit_message_text("📥 **ክፍያ መጠየቂያ**:\nቢያንስ 25 ብር መኖር አለበት። ቁጥርዎን ይላኩ።", 
-                              call.message.chat.id, call.message.message_id, reply_markup=get_main_markup())
-    
-    elif call.data == "promote":
-        bot.edit_message_text("🚀 **ማስታወቂያ ለማሰራት**:\nቻናልዎን ለማስተዋወቅ አድሚኑን ያነጋግሩ @th_ug_life", 
-                              call.message.chat.id, call.message.message_id, reply_markup=get_main_markup())
+@bot.message_handler(func=lambda m: m.text == "👤 My Account")
+def account(m):
+    data = get_user(m.chat.id)
+    if data:
+        bot.send_message(m.chat.id, f"💰 ሂሳብዎ: {data[0]} ብር\n📞 ስልክ: {data[3] or 'አልተመዘገበም'}")
 
-# --- Database Mockup (ለአጭር ማሳያ) ---
-def add_user(uid):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO users (user_id) VALUES (%s) ON CONFLICT DO NOTHING", (uid,))
-    conn.commit()
-    conn.close()
+@bot.message_handler(func=lambda m: m.text == "📥 Withdraw")
+def withdraw(m):
+    data = get_user(m.chat.id)
+    if data and not data[3]:
+        markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
+        markup.add(types.KeyboardButton("📱 ቁጥሬን ላክ", request_contact=True))
+        bot.send_message(m.chat.id, "እባክዎ መጀመሪያ ስልክ ቁጥርዎን ያስመዝግቡ:", reply_markup=markup)
+    else:
+        bot.send_message(m.chat.id, "ሂሳብዎ ዝግጁ ነው፣ አድሚን ያነጋግሩ።")
 
-def get_user(uid):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT user_id, balance FROM users WHERE user_id = %s", (uid,))
-    res = cur.fetchone()
-    conn.close()
-    return res or (uid, 0.0)
+@bot.message_handler(content_types=['contact'])
+def phone(m):
+    update_phone(m.chat.id, m.contact.phone_number)
+    bot.send_message(m.chat.id, "✅ ስልክ ቁጥርዎ ተመዝግቧል!")
 
+# --- Server Start ---
 if __name__ == '__main__':
-    bot.infinity_polling()
+    print("Bot is starting...")
+    bot.polling(none_stop=True, interval=0, timeout=20)
