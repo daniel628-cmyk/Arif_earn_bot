@@ -1,27 +1,29 @@
+
 import os
 import psycopg2
 import telebot
 from telebot import types
 
-# Configurations
 TOKEN = os.environ.get('BOT_TOKEN')
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
-bot = telebot.TeleBot(TOKEN, threaded=False)
+bot = telebot.TeleBot(TOKEN)
 
 def get_db_connection():
     return psycopg2.connect(DATABASE_URL, sslmode='require')
 
 # Database Initialization
 def init_db():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    # ተጠቃሚዎች እና የማስተዋወቂያ ቻናሎቻቸው
-    cur.execute("CREATE TABLE IF NOT EXISTS users (user_id BIGINT PRIMARY KEY, balance REAL DEFAULT 0.0)")
-    cur.execute("CREATE TABLE IF NOT EXISTS channels (id SERIAL PRIMARY KEY, user_id BIGINT, channel_link TEXT)")
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("CREATE TABLE IF NOT EXISTS users (user_id BIGINT PRIMARY KEY, balance REAL DEFAULT 0.0)")
+        cur.execute("CREATE TABLE IF NOT EXISTS channels (id SERIAL PRIMARY KEY, user_id BIGINT, channel_link TEXT)")
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"DB Error: {e}")
 
 init_db()
 
@@ -30,7 +32,7 @@ init_db()
 def start(m):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("📢 ቻናል አስተዋውቅ", "👥 ቻናሎችን ተቀላቀል")
-    bot.send_message(m.chat.id, "እንኳን ደህና መጡ! ይህ ቦት ቻናልዎን ለማስተዋወቅ ይረዳዎታል።", reply_markup=markup)
+    bot.send_message(m.chat.id, "እንኳን ደህና መጡ! ቻናልዎን ለማስተዋወቅ ዝግጁ ነን።", reply_markup=markup)
 
 @bot.message_handler(func=lambda m: m.text == "📢 ቻናል አስተዋውቅ")
 def promote(m):
@@ -39,28 +41,35 @@ def promote(m):
 
 def save_channel(m):
     link = m.text
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO channels (user_id, channel_link) VALUES (%s, %s)", (m.chat.id, link))
-    conn.commit()
-    cur.close()
-    conn.close()
-    bot.send_message(m.chat.id, "✅ ቻናልዎ ለሌሎች ተጠቃሚዎች እንዲታይ ተመዝግቧል!")
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO channels (user_id, channel_link) VALUES (%s, %s)", (m.chat.id, link))
+        conn.commit()
+        cur.close()
+        conn.close()
+        bot.send_message(m.chat.id, "✅ ቻናልዎ ተመዝግቧል!")
+    except Exception as e:
+        bot.send_message(m.chat.id, "ስህተት ተፈጥሯል፣ እንደገና ይሞክሩ።")
 
 @bot.message_handler(func=lambda m: m.text == "👥 ቻናሎችን ተቀላቀል")
 def view_channels(m):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT channel_link FROM channels ORDER BY id DESC LIMIT 5")
-    channels = cur.fetchall()
-    cur.close()
-    conn.close()
-    
-    if channels:
-        text = "ለማስተዋወቅ የቀረቡ ቻናሎች:\n\n" + "\n".join([c[0] for c in channels])
-        bot.send_message(m.chat.id, text)
-    else:
-        bot.send_message(m.chat.id, "በአሁኑ ሰዓት ምንም ቻናል የለም።")
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT channel_link FROM channels ORDER BY id DESC LIMIT 5")
+        channels = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        if channels:
+            text = "ለማስተዋወቅ የቀረቡ ቻናሎች:\n\n" + "\n".join([c[0] for c in channels])
+            bot.send_message(m.chat.id, text)
+        else:
+            bot.send_message(m.chat.id, "በአሁኑ ሰዓት ምንም ቻናል የለም።")
+    except Exception as e:
+        bot.send_message(m.chat.id, "የዳታቤዝ ስህተት!")
 
 if __name__ == '__main__':
-    bot.polling(none_stop=True)
+    # none_stop=True እና interval=0 ለኮንፍሊክት ችግር መፍትሄ ናቸው
+    bot.infinity_polling(none_stop=True, interval=0, timeout=20)
