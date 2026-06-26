@@ -1,28 +1,34 @@
 import os
-import psycopg2
 import telebot
+import psycopg2
+from psycopg2 import pool
 from telebot import types
 
-# Variables ከ Railway Variables ይወሰዳሉ
+# 1. Configuration
 TOKEN = os.environ.get('BOT_TOKEN')
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 bot = telebot.TeleBot(TOKEN)
 
-def get_db():
-    # Neon/Postgres ለግንኙነት sslmode ይፈልጋል
-    return psycopg2.connect(DATABASE_URL, sslmode='require')
+# Connection Pool መፍጠር (ይህ ቦትህ Crash እንዳያደርግ ይከላከላል)
+try:
+    db_pool = psycopg2.pool.SimpleConnectionPool(1, 10, DATABASE_URL, sslmode='require')
+    print("Database pool created successfully.")
+except Exception as e:
+    print(f"Error creating connection pool: {e}")
 
+# 2. የሰንጠረዦች መፍጠሪያ
 def init_db():
-    conn = get_db()
+    conn = db_pool.getconn()
     cur = conn.cursor()
     cur.execute("CREATE TABLE IF NOT EXISTS channels (id SERIAL PRIMARY KEY, user_id BIGINT, channel_link TEXT)")
     conn.commit()
     cur.close()
-    conn.close()
+    db_pool.putconn(conn)
 
 init_db()
 
+# 3. Handlers
 @bot.message_handler(commands=['start'])
 def start(m):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -35,30 +41,27 @@ def promote(m):
     bot.register_next_step_handler(msg, save_channel)
 
 def save_channel(m):
-    # ሊንኩን እና የላኪውን መረጃ በአግባቡ እንያዝ
     link = m.text
-    user_id = m.chat.id
-    
     try:
-        conn = get_db()
+        conn = db_pool.getconn()
         cur = conn.cursor()
-        cur.execute("INSERT INTO channels (user_id, channel_link) VALUES (%s, %s)", (user_id, link))
+        cur.execute("INSERT INTO channels (user_id, channel_link) VALUES (%s, %s)", (m.chat.id, link))
         conn.commit()
         cur.close()
-        conn.close()
+        db_pool.putconn(conn)
         bot.send_message(m.chat.id, "✅ ቻናልዎ በተሳካ ሁኔታ ተመዝግቧል!")
     except Exception as e:
-        bot.send_message(m.chat.id, f"⚠️ ስህተት ተፈጥሯል: {e}")
+        bot.send_message(m.chat.id, "⚠️ ዳታቤዝ ስህተት: እንደገና ይሞክሩ።")
 
 @bot.message_handler(func=lambda m: m.text == "👥 ቻናሎችን ተቀላቀል")
 def view_channels(m):
     try:
-        conn = get_db()
+        conn = db_pool.getconn()
         cur = conn.cursor()
         cur.execute("SELECT channel_link FROM channels ORDER BY id DESC LIMIT 5")
         rows = cur.fetchall()
         cur.close()
-        conn.close()
+        db_pool.putconn(conn)
         
         if rows:
             text = "ለማስተዋወቅ የቀረቡ ቻናሎች:\n\n" + "\n".join([f"🔗 {row[0]}" for row in rows])
