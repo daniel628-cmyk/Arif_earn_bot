@@ -3,18 +3,17 @@ import psycopg2
 import telebot
 from telebot import types
 
-# 1. Variables ከ Railway ይወሰዳሉ
+# 1. Variables ከ Railway Variables ይወሰዳሉ
 TOKEN = os.environ.get('BOT_TOKEN')
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 bot = telebot.TeleBot(TOKEN)
 
-# 2. የዳታቤዝ ግንኙነት ተግባር
+# 2. የዳታቤዝ ግንኙነት (sslmode ለ Neon የግድ ነው)
 def get_db():
-    # sslmode=require ለ Neon/Postgres ደህንነት አስፈላጊ ነው
     return psycopg2.connect(DATABASE_URL, sslmode='require')
 
-# 3. ሰንጠረዦችን ለመጀመሪያ ጊዜ መፍጠር
+# 3. የሰንጠረዦች መፍጠሪያ (Tables)
 def init_db():
     try:
         conn = get_db()
@@ -28,15 +27,15 @@ def init_db():
     except Exception as e:
         print(f"Init DB Error: {e}")
 
-# ቦቱ ሲነሳ ሰንጠረዦቹ መኖራቸውን ያረጋግጣል
+# ቦቱ ሲነሳ ሰንጠረዦችን ይፈትሻል
 init_db()
 
-# 4. የቦት ስራዎች (Handlers)
+# 4. የቦት Handler-ዎች
 @bot.message_handler(commands=['start'])
 def start(m):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("📢 ቻናል አስተዋውቅ", "👥 ቻናሎችን ተቀላቀል")
-    bot.send_message(m.chat.id, "እንኳን ደህና መጡ! ቦቱ አሁን እየሰራ ነው።", reply_markup=markup)
+    bot.send_message(m.chat.id, "ሰላም! ቦቱ አሁን እየሰራ ነው። ከታች ያለውን ይምረጡ፡", reply_markup=markup)
 
 @bot.message_handler(func=lambda m: m.text == "📢 ቻናል አስተዋውቅ")
 def promote(m):
@@ -54,7 +53,7 @@ def save_channel(m):
         conn.close()
         bot.send_message(m.chat.id, "✅ ቻናልዎ በተሳካ ሁኔታ ተመዝግቧል!")
     except Exception as e:
-        bot.send_message(m.chat.id, "⚠️ ዳታቤዝ ላይ ስህተት ተፈጥሯል፣ እንደገና ይሞክሩ።")
+        bot.send_message(m.chat.id, "⚠️ ዳታቤዝ ላይ ስህተት ተፈጥሯል፡ " + str(e))
 
 @bot.message_handler(func=lambda m: m.text == "👥 ቻናሎችን ተቀላቀል")
 def view_channels(m):
@@ -72,7 +71,8 @@ def view_channels(m):
         else:
             bot.send_message(m.chat.id, "በአሁኑ ሰዓት ምንም ቻናል የለም።")
     except Exception as e:
-        bot.send_message(m.chat.id, "⚠️ ዳታቤዝ ሊገናኝ አልቻለም።")
+        bot.send_message(m.chat.id, "⚠️ መረጃ መጫን አልተቻለም።")
 
 if __name__ == '__main__':
+    # Conflict እንዳይኖር none_stop=True አድርገን እንጀምራለን
     bot.infinity_polling(none_stop=True)
