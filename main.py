@@ -1,4 +1,3 @@
-
 import os
 import psycopg2
 import telebot
@@ -10,6 +9,7 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 bot = telebot.TeleBot(TOKEN)
 
 def get_db_connection():
+    # sslmode='require' ለ Railway ግዴታ ነው
     return psycopg2.connect(DATABASE_URL, sslmode='require')
 
 # Database Initialization
@@ -23,11 +23,10 @@ def init_db():
         cur.close()
         conn.close()
     except Exception as e:
-        print(f"DB Error: {e}")
+        print(f"DB Init Error: {e}")
 
 init_db()
 
-# Handlers
 @bot.message_handler(commands=['start'])
 def start(m):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -48,9 +47,10 @@ def save_channel(m):
         conn.commit()
         cur.close()
         conn.close()
-        bot.send_message(m.chat.id, "✅ ቻናልዎ ተመዝግቧል!")
+        bot.send_message(m.chat.id, "✅ ቻናልዎ በተሳካ ሁኔታ ተመዝግቧል!")
     except Exception as e:
-        bot.send_message(m.chat.id, "ስህተት ተፈጥሯል፣ እንደገና ይሞክሩ።")
+        print(f"Save Channel Error: {e}")
+        bot.send_message(m.chat.id, "⚠️ ይቅርታ፣ ዳታቤዝ ላይ ስህተት ተፈጥሯል፣ እንደገና ይሞክሩ።")
 
 @bot.message_handler(func=lambda m: m.text == "👥 ቻናሎችን ተቀላቀል")
 def view_channels(m):
@@ -63,13 +63,13 @@ def view_channels(m):
         conn.close()
         
         if channels:
-            text = "ለማስተዋወቅ የቀረቡ ቻናሎች:\n\n" + "\n".join([c[0] for c in channels])
+            text = "ለማስተዋወቅ የቀረቡ ቻናሎች:\n\n" + "\n".join([f"🔗 {c[0]}" for c in channels])
             bot.send_message(m.chat.id, text)
         else:
             bot.send_message(m.chat.id, "በአሁኑ ሰዓት ምንም ቻናል የለም።")
     except Exception as e:
-        bot.send_message(m.chat.id, "የዳታቤዝ ስህተት!")
+        print(f"View Channels Error: {e}")
+        bot.send_message(m.chat.id, "⚠️ ዳታቤዝ ሊገናኝ አልቻለም።")
 
 if __name__ == '__main__':
-    # none_stop=True እና interval=0 ለኮንፍሊክት ችግር መፍትሄ ናቸው
     bot.infinity_polling(none_stop=True, interval=0, timeout=20)
