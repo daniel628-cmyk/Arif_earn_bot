@@ -2,3 +2,5 @@ aiogram
 supabase
 python-dotenv
 uvloop
+pyTelegramBotAPI
+psycopg2-binary
