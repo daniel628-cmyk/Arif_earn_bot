@@ -7,11 +7,20 @@ pool = None
 
 async def connect_db():
     global pool
-    pool = await asyncpg.create_pool(DATABASE_URL)
+
+    pool = await asyncpg.create_pool(
+        DATABASE_URL,
+        min_size=1,
+        max_size=10,
+        statement_cache_size=0
+    )
+
     print("✅ DB connected")
+
 
 async def get_pool():
     return pool
+
 
 async def init_db():
     global pool
