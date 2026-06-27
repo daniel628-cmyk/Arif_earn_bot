@@ -13,7 +13,6 @@ async def connect_db():
 async def get_pool():
     return pool
 
-
 async def init_db():
     global pool
 
