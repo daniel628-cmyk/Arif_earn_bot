@@ -10,10 +10,17 @@ async def connect_db():
     pool = await asyncpg.create_pool(DATABASE_URL)
     print("✅ DB connected")
 
+async def get_pool():
+    return pool
+
+
 async def init_db():
+    global pool
+
     await pool.execute("""
     CREATE TABLE IF NOT EXISTS users (
         user_id BIGINT PRIMARY KEY,
+        username TEXT,
         balance NUMERIC DEFAULT 0
     )
     """)
