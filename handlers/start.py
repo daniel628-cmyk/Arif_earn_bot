@@ -1,29 +1,24 @@
-@router.message(Command("start"))
-async def start_handler(message: Message):
+from aiogram import Router
+from aiogram.filters import CommandStart
+from aiogram.types import Message
 
-    # ... የuser save ኮድ ...
+from keyboards.main_menu import main_menu
 
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="📢 Join Channels", callback_data="join_channels"),
-                InlineKeyboardButton(text="🤖 Join Bots", callback_data="join_bots")
-            ],
-            [
-                InlineKeyboardButton(text="💰 Balance", callback_data="balance"),
-                InlineKeyboardButton(text="💸 Withdraw", callback_data="withdraw")
-            ],
-            [
-                InlineKeyboardButton(text="👥 Referrals", callback_data="referrals"),
-                InlineKeyboardButton(text="📣 Advertise", callback_data="advertise")
-            ],
-            [
-                InlineKeyboardButton(text="ℹ️ Info", callback_data="info")
-            ]
-        ]
-    )
+router = Router()
+
+@router.message(CommandStart())
+async def start(message: Message):
+
+    text = """
+👋 <b>Welcome to Arif Earning Bot</b>
+
+💸 Earn money by completing tasks.
+
+Choose one of the options below.
+"""
 
     await message.answer(
-        "👋 Welcome to Arif Earn Bot",
-        reply_markup=keyboard
+        text,
+        parse_mode="HTML",
+        reply_markup=main_menu
     )
