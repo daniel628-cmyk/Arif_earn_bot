@@ -1,11 +1,14 @@
 from aiogram import Router, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from database import pool
+from database import get_pool
 
 router = Router()
 
+
 @router.message(F.text == "/start")
 async def start_handler(message: Message):
+
+    pool = await get_pool()
 
     user_id = message.from_user.id
     username = message.from_user.username
