@@ -1,34 +1,35 @@
-import asyncpg
 import os
+import psycopg
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-pool = None
-
-async def connect_db():
-    global pool
-
-    pool = await asyncpg.create_pool(
-        DATABASE_URL,
-        min_size=1,
-        max_size=10,
-        statement_cache_size=0
-    )
-
-    print("✅ DB connected")
+conn = None
 
 
-async def get_pool():
-    return pool
+def connect_db():
+    global conn
+
+    conn = psycopg.connect(DATABASE_URL)
+
+    print("✅ Database Connected")
 
 
-async def init_db():
-    global pool
+def get_db():
+    return conn
 
-    await pool.execute("""
-    CREATE TABLE IF NOT EXISTS users (
+
+def init_db():
+
+    cur = conn.cursor()
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users(
         user_id BIGINT PRIMARY KEY,
         username TEXT,
         balance NUMERIC DEFAULT 0
-    )
+    );
     """)
+
+    conn.commit()
+
+    cur.close()
