@@ -4,7 +4,6 @@ from database import get_pool
 
 router = Router()
 
-
 @router.message(F.text == "/start")
 async def start_handler(message: Message):
 
