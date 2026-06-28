@@ -29,6 +29,6 @@ async def start_handler(message: Message):
     cur.close()
 
     await message.answer(
-        "👋ሠላም እንኳን ወደ Arif earn Botመጣችሁ ",
-        reply_markup=main_menu()
-    )
+    "👋 Welcome to Arif Earn Bot!",
+    reply_markup=main_menu
+)
