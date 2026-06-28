@@ -6,7 +6,7 @@ from database import connect_db, init_db
 # የHandlers ፋይሎች
 from handlers.start import router as start_router
 from handlers.channel_handler import router as channel_router
-from handlers.bot_handler import router as bot_router # አዲሱ Handler
+from handlers.bot_handler import router as bot_router # <--- ይህን ብቻ ጨምር
 
 bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
@@ -14,7 +14,7 @@ dp = Dispatcher()
 # Router-ዎችን መመዝገብ
 dp.include_router(start_router)
 dp.include_router(channel_router)
-dp.include_router(bot_router) # አዲሱን ራውተር አስገባ
+dp.include_router(bot_router) # <--- ይህን ብቻ ጨምር
 
 async def main():
     connect_db()
