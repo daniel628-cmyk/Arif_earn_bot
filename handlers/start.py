@@ -2,23 +2,33 @@ from aiogram import Router
 from aiogram.filters import CommandStart
 from aiogram.types import Message
 
+from database import get_db
 from keyboards.main_menu import main_menu
 
 router = Router()
 
+
 @router.message(CommandStart())
-async def start(message: Message):
+async def start_handler(message: Message):
+    conn = get_db()
+    cur = conn.cursor()
 
-    text = """
-👋 <b>Welcome to Arif Earning Bot</b>
+    cur.execute(
+        """
+        INSERT INTO users(user_id, username)
+        VALUES(%s, %s)
+        ON CONFLICT (user_id) DO NOTHING
+        """,
+        (
+            message.from_user.id,
+            message.from_user.username,
+        ),
+    )
 
-💸 Earn money by completing tasks.
-
-Choose one of the options below.
-"""
+    conn.commit()
+    cur.close()
 
     await message.answer(
-        text,
-        parse_mode="HTML",
-        reply_markup=main_menu
+        "👋ሠላም እንኳን ወደ Arif earn Botመጣችሁ ",
+        reply_markup=main_menu()
     )
