@@ -17,6 +17,6 @@ main_menu = ReplyKeyboardMarkup(
             KeyboardButton(text="📊 Advertise"),
         ],
     ],
-    resize_keyboard=True,
-    is_persistent=True
+    resize_keyboard=True, # ቁልፎቹ እንደ መጠናቸው እንዲስተካከሉ
+    input_field_placeholder="Select an option..." # በምስሉ ላይ እንደሚታየው 'Message' የሚል ጽሁፍ በቦታው እንዲኖር
 )
