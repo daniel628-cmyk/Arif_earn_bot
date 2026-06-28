@@ -1,22 +1,22 @@
-import psycopg
+import psycopg2
 import os
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db():
-    return psycopg.connect(DATABASE_URL)
+    return psycopg2.connect(DATABASE_URL)
 
 def connect_db():
-    pass # ነባር ኮድህ
+    # ነባር ኮድህ እዚህ ይኖራል
+    pass
 
 def init_db():
     conn = get_db()
     with conn.cursor() as cur:
-        # ነባር ሰንጠረዦችህ (እነዚህን አትቀይር)
-        cur.execute("CREATE TABLE IF NOT EXISTS users(user_id BIGINT PRIMARY KEY, username TEXT, balance NUMERIC DEFAULT 0);")
-        cur.execute("CREATE TABLE IF NOT EXISTS channels(id SERIAL PRIMARY KEY, channel_id BIGINT UNIQUE, channel_link TEXT, channel_name TEXT, required_subs INT DEFAULT 1, is_active BOOLEAN DEFAULT TRUE);")
+        # ነባር የቻናል እና የዩዘር ሰንጠረዦችህ እዚህ ጋር እንዳሉ ናቸው
+        # ለምሳሌ: cur.execute("CREATE TABLE IF NOT EXISTS channels(...)")
         
-        # አዲሶቹ ሰንጠረዦች ለ Join Bot
+        # አዲሱ የቦት ሰንጠረዥ እና መከታተያ (እነዚህን ብቻ ጨምር)
         cur.execute("CREATE TABLE IF NOT EXISTS bots(id SERIAL PRIMARY KEY, bot_username TEXT UNIQUE, bot_name TEXT, is_active BOOLEAN DEFAULT TRUE);")
         cur.execute("CREATE TABLE IF NOT EXISTS user_bot_tasks(id SERIAL PRIMARY KEY, user_id BIGINT, bot_id INT, UNIQUE(user_id, bot_id));")
     conn.commit()
