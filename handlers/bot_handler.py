@@ -1,70 +1,45 @@
-import psycopg2
-import os
+from aiogram import Router, F
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from database import get_db, mark_bot_as_done
 
-# ከ Railway/Supabase የምታገኘው የዳታቤዝ ግንኙነት
-DATABASE_URL = os.environ.get("DATABASE_URL")
-conn = psycopg2.connect(DATABASE_URL)
+router = Router()
 
-def get_db():
-    return conn
+@router.message(F.text == "🤖 Join Bots")
+async def join_bots_handler(message: Message):
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            # ከዳታቤዝ ውስጥ ንቁ የሆኑ ቦቶችን መምረጥ
+            cur.execute("SELECT id, bot_username, bot_name FROM bots WHERE is_active = TRUE")
+            bots = cur.fetchall()
+            
+        if not bots:
+            await message.answer("በአሁኑ ሰዓት ምንም ቦት የለም።")
+            return
 
-def init_db():
-    """ሁሉንም ሰንጠረዦች በኮድ መፍጠር"""
-    with conn.cursor() as cur:
-        # 1. የተጠቃሚዎች ሰንጠረዥ
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS users(
-            user_id BIGINT PRIMARY KEY,
-            username TEXT,
-            balance NUMERIC DEFAULT 0
-        );
-        """)
+        # ለእያንዳንዱ ቦት የInline Button መፍጠር
+        for b_id, username, name in bots:
+            # ለተጠቃሚው በቀጥታ ወደ ቦቱ የሚወስድ ሊንክ እና የማረጋገጫ በተን
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="ወደ ቦቱ ሂድ", url=f"https://t.me/{username}")],
+                [InlineKeyboardButton(text="✅ አረጋግጥ (Verify)", callback_data=f"vb_{b_id}")]
+            ])
+            
+            await message.answer(f"ቦት፡ **{name}**\n\nከላይ ያለውን ሊንክ በመጠቀም ቦቱን ይቀላቀሉ። ከዛም 'አረጋግጥ' የሚለውን ይጫኑ።", 
+                                 reply_markup=keyboard, parse_mode="Markdown")
         
-        # 2. የቻናሎች ሰንጠረዥ
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS channels(
-            id SERIAL PRIMARY KEY,
-            channel_id BIGINT UNIQUE NOT NULL,
-            channel_link TEXT NOT NULL,
-            channel_name TEXT NOT NULL,
-            required_subs INT DEFAULT 1,
-            is_active BOOLEAN DEFAULT TRUE
-        );
-        """)
-        
-        # 3. የቦቶች ሰንጠረዥ
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS bots(
-            id SERIAL PRIMARY KEY,
-            bot_username TEXT UNIQUE NOT NULL,
-            bot_name TEXT NOT NULL,
-            is_active BOOLEAN DEFAULT TRUE
-        );
-        """)
-        
-        # 4. የቦት ስራዎች መከታተያ ሰንጠረዥ
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS user_bot_tasks(
-            id SERIAL PRIMARY KEY,
-            user_id BIGINT,
-            bot_id INT,
-            UNIQUE(user_id, bot_id)
-        );
-        """)
-        
-    conn.commit()
-    print("✅ All Tables (Users, Channels, Bots, Bot Tasks) initialized successfully!")
+    except Exception as e:
+        print(f"Error fetching bots: {e}")
+        await message.answer("ይቅርታ፣ በቴክኒክ ችግር ቦቶችን ማምጣት አልቻልኩም።")
 
-def mark_bot_as_done(user_id, bot_id):
-    """ተጠቃሚው ቦቱን እንደሰራ መመዝገብ እና ነጥብ መጨመር"""
-    with conn.cursor() as cur:
-        # አስቀድሞ ሰርቶት እንደሆነ ፈትሽ
-        cur.execute("SELECT 1 FROM user_bot_tasks WHERE user_id = %s AND bot_id = %s", (user_id, bot_id))
-        if cur.fetchone():
-            return False 
-        
-        # መዝግበው እና ብር ጨምርለት
-        cur.execute("INSERT INTO user_bot_tasks (user_id, bot_id) VALUES (%s, %s)", (user_id, bot_id))
-        cur.execute("UPDATE users SET balance = balance + 50 WHERE user_id = %s", (user_id,))
-        conn.commit()
-        return True
+@router.callback_query(F.data.startswith("vb_"))
+async def verify_bot_callback(callback: CallbackQuery):
+    # ከ callback_data ውስጥ የቦቱን ID መውሰድ
+    bot_id = int(callback.data.split("_")[1])
+    user_id = callback.from_user.id
+    
+    # ነጥብ የመጨመር እና የመመዝገብ ስራ
+    if mark_bot_as_done(user_id, bot_id):
+        await callback.answer("✅ ተሳክቷል! 50 ብር ተጨምሮልዎታል!", show_alert=True)
+    else:
+        await callback.answer("⚠️ ይህን ቦት ቀድመው ሰርተውታል ወይም ነጥብ አግኝተውበታል!", show_alert=True)
