@@ -1,25 +1,33 @@
 import asyncio
-
 from aiogram import Bot, Dispatcher
-
 from config import BOT_TOKEN
 from database import connect_db, init_db
+
+# የHandlers ፋይሎችን ከዚህ አስገባ
 from handlers.start import router as start_router
+from handlers.channel_handler import router as channel_router # ይህንን አዲስ ፋይል አገናኘነው
 
 bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
 
+# Router-ዎችን መመዝገብ
 dp.include_router(start_router)
-
+dp.include_router(channel_router) # ይህንን ጨምር
 
 async def main():
+    # 1. ዳታቤዝ ማገናኘት
     connect_db()
+    
+    # 2. ሰንጠረዦችን መፍጠር (እዚህ ጋር ነው channels table የሚፈጠረው)
     init_db()
 
-    print("🚀 Bot is running")
+    print("🚀 Bot is running smoothly...")
 
+    # 3. Conflict እንዳይፈጠር polling መጀመር
     await dp.start_polling(bot)
 
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        print(f"Error: {e}")
