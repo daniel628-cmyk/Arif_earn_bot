@@ -1,44 +1,22 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-
-def main_menu():
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📢 Join Channels",
-                    callback_data="join_channels"
-                ),
-                InlineKeyboardButton(
-                    text="🤖 Join Bots",
-                    callback_data="join_bots"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="💰 Balance",
-                    callback_data="balance"
-                ),
-                InlineKeyboardButton(
-                    text="💸 Withdraw",
-                    callback_data="withdraw"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="👥 Referrals",
-                    callback_data="referrals"
-                ),
-                InlineKeyboardButton(
-                    text="📢 Advertise",
-                    callback_data="advertise"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="ℹ️ Info",
-                    callback_data="info"
-                )
-            ]
-        ]
-    )
+main_menu = ReplyKeyboardMarkup(
+    keyboard=[
+        [
+            KeyboardButton(text="📢 Join Channels"),
+            KeyboardButton(text="🤖 Join Bots"),
+            KeyboardButton(text="📺 Watch Ads"),
+        ],
+        [
+            KeyboardButton(text="📤 Withdraw"),
+            KeyboardButton(text="💰 Balance"),
+            KeyboardButton(text="ℹ️ Info"),
+        ],
+        [
+            KeyboardButton(text="👫 Referrals"),
+            KeyboardButton(text="📊 Advertise"),
+        ],
+    ],
+    resize_keyboard=True,
+    is_persistent=True
+)
