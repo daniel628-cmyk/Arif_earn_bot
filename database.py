@@ -1,10 +1,10 @@
-import psycopg2
+import psycopg
 import os
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db():
-    return psycopg2.connect(DATABASE_URL)
+    return psycopg.connect(DATABASE_URL)
 
 def connect_db():
     pass # ነባር ኮድህ
