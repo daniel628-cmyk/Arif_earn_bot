@@ -2,7 +2,7 @@ from aiogram import Router
 from aiogram.filters import CommandStart
 from aiogram.types import Message
 
-from database import get_db
+from database import add_user
 from keyboards.main_menu import main_menu
 
 router = Router()
@@ -10,25 +10,21 @@ router = Router()
 
 @router.message(CommandStart())
 async def start_handler(message: Message):
-    conn = get_db()
-    cur = conn.cursor()
 
-    cur.execute(
-        """
-        INSERT INTO users(user_id, username)
-        VALUES(%s, %s)
-        ON CONFLICT (user_id) DO NOTHING
-        """,
-        (
-            message.from_user.id,
-            message.from_user.username,
-        ),
-    )
+    user_id = message.from_user.id
+    username = message.from_user.username or ""
 
-    conn.commit()
-    cur.close()
+    add_user(user_id, username)
+
+    text = f"""
+👋 Welcome {message.from_user.first_name}
+
+💰 Earn money by completing simple tasks.
+
+Choose one of the options below.
+"""
 
     await message.answer(
-    "👋 Welcome to Arif Earn Bot!",
-    reply_markup=main_menu
-)
+        text,
+        reply_markup=main_menu
+    )
