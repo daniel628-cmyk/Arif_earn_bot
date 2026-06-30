@@ -1,6 +1,5 @@
 import asyncio
 from aiogram import Bot, Dispatcher
-# 1. MemoryStorageን አስገባ
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import BOT_TOKEN
@@ -13,31 +12,29 @@ from handlers.channels import router as channels_router
 from handlers.balance import router as balance_router
 from handlers.withdraw import router as withdraw_router
 from handlers.referrals import router as referrals_router
-from handlers.advertise import router as advertise_router
+from handlers.advertise import router as advertise_router # ማስታወቂያ
 from handlers.info import router as info_router
 from handlers.admin import router as admin_router
 
 bot = Bot(token=BOT_TOKEN)
-# 2. Dispatcher ውስጥ storage ጨምር
 dp = Dispatcher(storage=MemoryStorage())
 
-# Include Routers
-dp.include_router(start_router)
-dp.include_router(bots_router)
-dp.include_router(channels_router)
+# ራውተሮችን ሲያካትቱ advertise_router ከሁሉም በላይ መሆን አለበት
+# ምክንያቱም አድቨርታይዝመንት ልዩ ትዕዛዝ ስለሆነ ቀድሞ መፈተሽ አለበት
+dp.include_router(advertise_router) 
+dp.include_router(admin_router)
 dp.include_router(balance_router)
 dp.include_router(withdraw_router)
 dp.include_router(referrals_router)
-dp.include_router(advertise_router)
+dp.include_router(bots_router)
+dp.include_router(channels_router)
 dp.include_router(info_router)
-dp.include_router(admin_router)
-
+dp.include_router(start_router) # start_router መጨረሻ ላይ ይሁን
 
 async def main():
     init_db()
     print("✅ Bot Started Successfully")
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
