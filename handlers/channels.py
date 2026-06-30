@@ -1,117 +1,33 @@
-from aiogram import Router, F
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-
-from database import get_db, add_balance
+# handlers/channels.py
+from aiogram import Router, F, Bot
+from aiogram.types import CallbackQuery
+from db import get_db
+from utils.checks import check_user_sub
 
 router = Router()
 
-
-@router.callback_query(F.data == "join_channels")
-async def join_channels(callback: CallbackQuery):
-
+@router.callback_query(F.data.startswith("vc_"))
+async def verify_channel_callback(callback: CallbackQuery, bot: Bot):
+    channel_db_id = int(callback.data.split("_")[1])
+    
+    # 1. ከዳታቤዝ የቻናሉን ID አምጣ
     conn = get_db()
-
-    with conn.cursor() as cur:
-        cur.execute("""
-            SELECT id,
-                   channel_name,
-                   channel_username,
-                   reward
-            FROM channels
-            WHERE is_active = TRUE
-        """)
-
-        channels = cur.fetchall()
-
+    cur = conn.cursor()
+    cur.execute("SELECT channel_id FROM channels WHERE id = %s", (channel_db_id,))
+    res = cur.fetchone()
     conn.close()
-
-    if not channels:
-        await callback.message.answer("📢 No channels available.")
-        await callback.answer()
+    
+    if not res:
+        await callback.answer("ቻናሉ አልተገኘም!", show_alert=True)
         return
-
-    for channel_id, name, username, reward in channels:
-
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="📢 Join Channel",
-                        url=f"https://t.me/{username}"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="✅ Verify",
-                        callback_data=f"verify_channel_{channel_id}"
-                    )
-                ]
-            ]
-        )
-
-        await callback.message.answer(
-            f"""
-📢 {name}
-
-💰 Reward : {reward} Birr
-""",
-            reply_markup=keyboard
-        )
-
-    await callback.answer()
-@router.callback_query(F.data.startswith("verify_channel_"))
-async def verify_channel(callback: CallbackQuery):
-
-    channel_id = int(callback.data.split("_")[2])
-
-    user_id = callback.from_user.id
-
-    conn = get_db()
-
-    with conn.cursor() as cur:
-
-        cur.execute("""
-        SELECT 1
-        FROM user_channel_tasks
-        WHERE user_id=%s
-        AND channel_id=%s
-        """,
-        (user_id, channel_id))
-
-        if cur.fetchone():
-
-            await callback.answer(
-                "✅ Already completed.",
-                show_alert=True
-            )
-
-            conn.close()
-            return
-
-        cur.execute("""
-        SELECT reward
-        FROM channels
-        WHERE id=%s
-        """,
-        (channel_id,))
-
-        reward = cur.fetchone()[0]
-
-        cur.execute("""
-        INSERT INTO user_channel_tasks(
-            user_id,
-            channel_id
-        )
-        VALUES(%s,%s)
-        """,
-        (user_id, channel_id))
-
-    conn.commit()
-    conn.close()
-
-    add_balance(user_id, reward)
-
-    await callback.answer(
-        f"🎉 {reward} Birr Added.",
-        show_alert=True
-    )
+    
+    chat_id = res[0]
+    
+    # 2. ተጠቃሚው መቀላቀሉን ቼክ አድርግ
+    is_joined = await check_user_sub(bot, chat_id, callback.from_user.id)
+    
+    if is_joined:
+        # እዚህ ጋር ለተጠቃሚው ነጥብ የምትጨምርበትን ኮድ አስገባ (ለምሳሌ balance update)
+        await callback.answer("✅ ተረጋግጧል! ሽልማት ተሰጥቶዎታል!", show_alert=True)
+    else:
+        await callback.answer("❌ ገና አልተቀላቀሉም! እባክዎ ይቀላቀሉ!", show_alert=True)
