@@ -15,5 +15,6 @@ async def main():
     print("Bot is running...")
     await dp.start_polling(bot)
 
+from handlers.bots import router as bots_router
 if __name__ == "__main__":
     asyncio.run(main())
