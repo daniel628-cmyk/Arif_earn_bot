@@ -9,8 +9,37 @@ def get_db():
 def init_db():
     conn = get_db()
     with conn.cursor() as cur:
-        # Tables creation
-        cur.execute("CREATE TABLE IF NOT EXISTS channels(id SERIAL PRIMARY KEY, channel_id BIGINT UNIQUE, channel_link TEXT, channel_name TEXT, is_active BOOLEAN DEFAULT TRUE, limit_count INT DEFAULT 0, current_count INT DEFAULT 0);")
+        # የነበሩት ሰንጠረዦች
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS channels(
+                id SERIAL PRIMARY KEY, 
+                channel_id BIGINT UNIQUE, 
+                channel_link TEXT, 
+                channel_name TEXT, 
+                is_active BOOLEAN DEFAULT TRUE, 
+                limit_count INT DEFAULT 0, 
+                current_count INT DEFAULT 0
+            );
+        """)
+        
+        # አዲሱ ሰንጠረዥ - ለባላንስ
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS balances(
+                user_id BIGINT PRIMARY KEY, 
+                amount FLOAT DEFAULT 0
+            );
+        """)
+        
+        # አዲሱ ሰንጠረዥ - ለማስታወቂያ (ads)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS ads(
+                id SERIAL PRIMARY KEY, 
+                user_id BIGINT, 
+                link TEXT, 
+                price FLOAT, 
+                status TEXT DEFAULT 'pending'
+            );
+        """)
     conn.commit()
     conn.close()
 
