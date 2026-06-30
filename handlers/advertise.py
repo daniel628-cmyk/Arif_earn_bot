@@ -10,7 +10,7 @@ class AdvertiseState(StatesGroup):
     waiting_for_link = State()
     waiting_for_amount = State()
 
-@router.message(F.text == "📢 Advertise")
+@router.message(F.text.contains("Advertise"))
 async def start_advertise(message: Message, state: FSMContext):
     await message.answer("📢 ለማስተዋወቅ የሚፈልጉትን የቻናል ወይም የቦት ሊንክ ይላኩ።")
     await state.set_state(AdvertiseState.waiting_for_link)
@@ -30,12 +30,11 @@ async def get_amount(message: Message, state: FSMContext):
         return
 
     data = await state.get_data()
-    link = data['link']
+    link = data.get('link')
     user_id = message.from_user.id
     
     conn = get_db()
     with conn.cursor() as cur:
-        # ማስታወቂያውን ወደ ሰንጠረዡ አስገባ
         cur.execute(
             "INSERT INTO ads (user_id, link, price, status) VALUES (%s, %s, %s, 'pending')",
             (user_id, link, amount)
