@@ -38,3 +38,51 @@ def init_db():
     conn.commit()
     cur.close()
     conn.close()
+def get_bots():
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, bot_username, bot_name
+        FROM bots
+        WHERE is_active = TRUE
+    """)
+
+    bots = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return bots
+
+
+def mark_bot_done(user_id, bot_id):
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT * FROM user_bot_tasks WHERE user_id=%s AND bot_id=%s",
+        (user_id, bot_id)
+    )
+
+    if cur.fetchone():
+        cur.close()
+        conn.close()
+        return False
+
+    cur.execute(
+        "INSERT INTO user_bot_tasks(user_id, bot_id) VALUES(%s,%s)",
+        (user_id, bot_id)
+    )
+
+    cur.execute(
+        "UPDATE users SET balance=balance+50 WHERE user_id=%s",
+        (user_id,)
+    )
+
+    conn.commit()
+
+    cur.close()
+    conn.close()
+
+    return True
