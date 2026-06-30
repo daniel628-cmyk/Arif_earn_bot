@@ -4,7 +4,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from db import get_db
 
-ADMIN_ID = 5544893200 # እዚህ የራስህን Telegram ID አስገባ
+# የራስህን የቴሌግራም ID እዚህ አስገባ
+ADMIN_ID = 123456789 
 router = Router()
 
 class WithdrawForm(StatesGroup):
@@ -14,8 +15,9 @@ class WithdrawForm(StatesGroup):
 
 @router.message(F.text == "💸 Withdraw")
 async def start_withdraw(message: Message, state: FSMContext):
-    # ባላንሱን ይመልከቱ
     user_id = message.from_user.id
+    
+    # ባላንሱን ከዳታቤዝ እንፈትሽ
     conn = get_db()
     with conn.cursor() as cur:
         cur.execute("SELECT amount FROM balances WHERE user_id = %s", (user_id,))
@@ -24,7 +26,7 @@ async def start_withdraw(message: Message, state: FSMContext):
     conn.close()
 
     if amount < 50:
-        await message.answer(f"❌ ቢያንስ 50 ብር ሊኖርዎት ይገባል። የእርስዎ ባላንስ፡ {amount} ብር ነው።")
+        await message.answer(f"❌ ቢያንስ 50 ብር መውጣት ይችላሉ። የእርስዎ ባላንስ፡ {amount} ብር ነው።")
     else:
         await message.answer("✅ እባክዎን የቴሌብር ስምዎን (Full Name) ይላኩ።")
         await state.set_state(WithdrawForm.waiting_for_name)
@@ -44,17 +46,20 @@ async def get_phone(message: Message, state: FSMContext):
 @router.message(WithdrawForm.waiting_for_amount)
 async def get_amount(message: Message, state: FSMContext, bot):
     user_data = await state.get_data()
-    amount = message.text
+    amount_str = message.text
     
-    # ለአድሚን መላክ
-    await bot.send_message(
-        ADMIN_ID, 
-        f"💸 **አዲስ የWithdraw ጥያቄ!**\n\n"
-        f"👤 ተጠቃሚ፡ @{message.from_user.username or 'N/A'}\n"
-        f"📛 ስም፡ {user_data['name']}\n"
-        f"📱 ስልክ፡ {user_data['phone']}\n"
-        f"💰 መጠን፡ {amount} ብር"
-    )
+    # ለአድሚን ጥያቄውን መላክ
+    try:
+        await bot.send_message(
+            ADMIN_ID, 
+            f"💸 **አዲስ የWithdraw ጥያቄ!**\n\n"
+            f"👤 ተጠቃሚ፡ @{message.from_user.username or 'N/A'}\n"
+            f"📛 ስም፡ {user_data['name']}\n"
+            f"📱 ስልክ፡ {user_data['phone']}\n"
+            f"💰 መጠን፡ {amount_str} ብር"
+        )
+        await message.answer("✅ ጥያቄዎ በተሳካ ሁኔታ ለአድሚን ተልኳል። በቅርቡ ክፍያ ይፈጸምልዎታል!")
+    except Exception as e:
+        await message.answer("❌ ጥያቄውን ለመላክ ችግር አጋጥሟል።")
     
-    await message.answer("✅ ጥያቄዎ በተሳካ ሁኔታ ለአድሚን ተልኳል። በቅርቡ ክፍያ ይፈጸምልዎታል!")
     await state.clear()
