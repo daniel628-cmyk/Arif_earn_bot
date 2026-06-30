@@ -1,5 +1,7 @@
 import asyncio
 from aiogram import Bot, Dispatcher
+# 1. MemoryStorageን አስገባ
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import BOT_TOKEN
 from db import init_db
@@ -16,7 +18,8 @@ from handlers.info import router as info_router
 from handlers.admin import router as admin_router
 
 bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
+# 2. Dispatcher ውስጥ storage ጨምር
+dp = Dispatcher(storage=MemoryStorage())
 
 # Include Routers
 dp.include_router(start_router)
