@@ -4,9 +4,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from db import get_db
 
-router = Router()  # ይህ መስመር የግድ መኖር አለበት!
+router = Router()
 
-# የማስታወቂያ ግብዓቶች (States)
 class AdvertiseState(StatesGroup):
     waiting_for_link = State()
     waiting_for_amount = State()
@@ -15,3 +14,34 @@ class AdvertiseState(StatesGroup):
 async def start_advertise(message: Message, state: FSMContext):
     await message.answer("📢 ለማስተዋወቅ የሚፈልጉትን የቻናል ወይም የቦት ሊንክ ይላኩ።")
     await state.set_state(AdvertiseState.waiting_for_link)
+
+@router.message(AdvertiseState.waiting_for_link)
+async def get_link(message: Message, state: FSMContext):
+    await state.update_data(link=message.text)
+    await message.answer("✅ ሊንኩ ተይዟል። አሁን ማውጣት የሚፈልጉትን የገንዘብ መጠን (price) ይላኩ።")
+    await state.set_state(AdvertiseState.waiting_for_amount)
+
+@router.message(AdvertiseState.waiting_for_amount)
+async def get_amount(message: Message, state: FSMContext):
+    try:
+        amount = float(message.text)
+    except ValueError:
+        await message.answer("❌ እባክዎን ቁጥር ብቻ ይላኩ (ለምሳሌ፡ 50)።")
+        return
+
+    data = await state.get_data()
+    link = data['link']
+    user_id = message.from_user.id
+    
+    conn = get_db()
+    with conn.cursor() as cur:
+        # ማስታወቂያውን ወደ ሰንጠረዡ አስገባ
+        cur.execute(
+            "INSERT INTO ads (user_id, link, price, status) VALUES (%s, %s, %s, 'pending')",
+            (user_id, link, amount)
+        )
+        conn.commit()
+    conn.close()
+    
+    await message.answer("✅ ማስታወቂያዎ በተሳካ ሁኔታ ለአድሚን ተልኳል።")
+    await state.clear()
