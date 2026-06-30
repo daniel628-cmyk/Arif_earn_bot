@@ -4,7 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from db import get_db
 
-ADMIN_ID = 123456789  # እዚህ የራስህን Telegram ID አስገባ
+ADMIN_ID = 5544893200 # እዚህ የራስህን Telegram ID አስገባ
 router = Router()
 
 class WithdrawForm(StatesGroup):
