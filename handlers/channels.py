@@ -59,3 +59,59 @@ async def join_channels(callback: CallbackQuery):
         )
 
     await callback.answer()
+@router.callback_query(F.data.startswith("verify_channel_"))
+async def verify_channel(callback: CallbackQuery):
+
+    channel_id = int(callback.data.split("_")[2])
+
+    user_id = callback.from_user.id
+
+    conn = get_db()
+
+    with conn.cursor() as cur:
+
+        cur.execute("""
+        SELECT 1
+        FROM user_channel_tasks
+        WHERE user_id=%s
+        AND channel_id=%s
+        """,
+        (user_id, channel_id))
+
+        if cur.fetchone():
+
+            await callback.answer(
+                "✅ Already completed.",
+                show_alert=True
+            )
+
+            conn.close()
+            return
+
+        cur.execute("""
+        SELECT reward
+        FROM channels
+        WHERE id=%s
+        """,
+        (channel_id,))
+
+        reward = cur.fetchone()[0]
+
+        cur.execute("""
+        INSERT INTO user_channel_tasks(
+            user_id,
+            channel_id
+        )
+        VALUES(%s,%s)
+        """,
+        (user_id, channel_id))
+
+    conn.commit()
+    conn.close()
+
+    add_balance(user_id, reward)
+
+    await callback.answer(
+        f"🎉 {reward} Birr Added.",
+        show_alert=True
+    )
