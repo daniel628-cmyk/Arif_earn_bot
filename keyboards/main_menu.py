@@ -1,22 +1,50 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-main_menu = ReplyKeyboardMarkup(
-    keyboard=[
+main_menu = InlineKeyboardMarkup(
+    inline_keyboard=[
+
         [
-            KeyboardButton(text="📢 Join Channels"),
-            KeyboardButton(text="🤖 Join Bots"),
-            KeyboardButton(text="📺 Watch Ads"),
+            InlineKeyboardButton(
+                text="📢 Join Channels",
+                callback_data="join_channels"
+            )
         ],
+
         [
-            KeyboardButton(text="📤 Withdraw"),
-            KeyboardButton(text="💰 Balance"),
-            KeyboardButton(text="ℹ️ Info"),
+            InlineKeyboardButton(
+                text="🤖 Join Bots",
+                callback_data="join_bots"
+            )
         ],
+
         [
-            KeyboardButton(text="👫 Referrals"),
-            KeyboardButton(text="📊 Advertise"),
+            InlineKeyboardButton(
+                text="💰 Balance",
+                callback_data="balance"
+            ),
+            InlineKeyboardButton(
+                text="💸 Withdraw",
+                callback_data="withdraw"
+            )
         ],
-    ],
-    resize_keyboard=True, # ቁልፎቹ እንደ መጠናቸው እንዲስተካከሉ
-    input_field_placeholder="Select an option..." # በምስሉ ላይ እንደሚታየው 'Message' የሚል ጽሁፍ በቦታው እንዲኖር
+
+        [
+            InlineKeyboardButton(
+                text="👥 Referrals",
+                callback_data="referrals"
+            ),
+            InlineKeyboardButton(
+                text="📢 Advertising",
+                callback_data="advertise"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                text="ℹ️ Info",
+                callback_data="info"
+            )
+        ]
+
+    ]
 )
