@@ -64,11 +64,24 @@ async def process_members(message: Message, state: FSMContext, bot: Bot):
     else:
         user_mention = message.from_user.username
         user_info = f"@{user_mention}" if user_mention else f"ID: {message.from_user.id}"
+        
         await message.answer("⚠️ በቂ ባላንስ የለዎትም። እባክዎ @Ariff_Support ያናግሩ።")
-        await bot.send_message(
-            ADMIN_ID, 
-            f"⚠️ **ማስታወቂያ ክፍያ ይፈልጋል!**\n\n👤 ተጠቃሚ: {user_info}\n🆔 User ID: {message.from_user.id}\n💰 የሚፈለግ ክፍያ: {total_price} ብር\n🔗 ሊንክ: {data['link']}\n📍 አይነት: {adv_type.upper()}"
-        )
+        
+        # DEBUGGING: ለአድሚን የመላክ ሂደት በሎግ ላይ እንዲታይ ይደረጋል
+        try:
+            print(f"DEBUG: Attempting to notify ADMIN_ID {ADMIN_ID} about user {user_info}")
+            await bot.send_message(
+                ADMIN_ID, 
+                f"⚠️ **ማስታወቂያ ክፍያ ይፈልጋል!**\n\n"
+                f"👤 ተጠቃሚ: {user_info}\n"
+                f"🆔 User ID: {message.from_user.id}\n"
+                f"💰 የሚፈለግ ክፍያ: {total_price} ብር\n"
+                f"🔗 ሊንክ: {data['link']}\n"
+                f"📍 አይነት: {adv_type.upper()}" 
+            )
+            print("DEBUG: Admin notified successfully.")
+        except Exception as e:
+            print(f"DEBUG: Error sending to admin: {e}")
         
     conn.close()
     await state.clear()
