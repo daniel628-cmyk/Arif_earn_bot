@@ -1,12 +1,11 @@
-from aiogram import Router, F
+from aiogram import Router
 from aiogram.types import Message
-from keyboards.main_menu import main_menu
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext # ይሄንን አስገባ
 
 router = Router()
 
-@router.message(F.text == "/start")
-async def start(message: Message):
-    await message.answer(
-        "Welcome to Earn Bot 🚀",
-        reply_markup=main_menu
-    )
+@router.message(Command("start"))
+async def start_handler(message: Message, state: FSMContext): # state ፓራሜትር ጨምር
+    await state.clear() # ተጠቃሚው ተጣብቆበት የነበረውን ስቴት አጽዳ
+    await message.answer("ሰላም! ወደ Arif Earning Bot በደህና መጡ። ምን ማድረግ ይፈልጋሉ?")
