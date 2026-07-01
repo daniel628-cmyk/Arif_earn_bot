@@ -1,78 +1,56 @@
+
 from aiogram import Router, F, Bot
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from db import get_db
-from config import ADMIN_ID
+from config import ADMIN_ID, BOT_USERNAME
 
 router = Router()
 
 class AdvertiseState(StatesGroup):
     waiting_for_link = State()
     waiting_for_members = State()
+    waiting_for_bot_msg = State() # ለቦት ማስታወቂያ
 
-# 1. መጀመሪያ ተጠቃሚው እንዲመርጥ ማድረግ
 @router.message(F.text == "📣 Advertise")
-async def start_advertise(message: Message):
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Channel", callback_data="adv_channel")],
-        [InlineKeyboardButton(text="🤖 Bot", callback_data="adv_bot")]
+async def advertise_menu(message: Message):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📢 Channel", callback_data="adv_type_channel"),
+         InlineKeyboardButton(text="🤖 Bot", callback_data="adv_type_bot")]
     ])
-    await message.answer("📢 ምን ማስተዋወቅ ይፈልጋሉ? ከታች ካሉት አማራጮች ይምረጡ፡", reply_markup=keyboard)
+    await message.answer("📢 ምን ማስተዋወቅ ይፈልጋሉ?", reply_markup=kb)
 
-# 2. ምርጫውን ሲጫን
-@router.callback_query(F.data.startswith("adv_"))
-async def choose_type(callback: CallbackQuery, state: FSMContext):
-    adv_type = callback.data.split("_")[1] # channel ወይም bot
+@router.callback_query(F.data.startswith("adv_type_"))
+async def set_type(call: CallbackQuery, state: FSMContext):
+    adv_type = call.data.split("_")[2]
     await state.update_data(adv_type=adv_type)
     
-    await callback.message.edit_text(f"✅ {adv_type.upper()} መርጠዋል።\n🔗 ማስተዋወቅ የሚፈልጉትን ሊንክ ይላኩ፡")
-    await state.set_state(AdvertiseState.waiting_for_link)
-    await callback.answer()
+    if adv_type == 'channel':
+        await call.message.answer("🔗 ቻናሉ ላይ Bot Admin ያድርጉ። ከዛ ቻናል ሊንክ (ለምሳሌ @የቻናል ሊንክ ) ይላኩ።")
+        await state.set_state(AdvertiseState.waiting_for_link)
+    else:
+        await call.message.answer("🔎 ማስተዋወቅ የሚፈልጉትን የቦት Message Forward ያድርጉ:")
+        await state.set_state(AdvertiseState.waiting_for_bot_msg)
+    await call.answer()
 
-# 3. ሊንክ መቀበል እና ቻናል ከሆነ አድሚንነት ማረጋገጥ
-@router.message(AdvertiseState.waiting_for_link)
-async def check_link(message: Message, state: FSMContext, bot: Bot):
-    data = await state.get_data()
-    link = message.text.replace("https://t.me/", "@")
-    
-    if data['adv_type'] == 'channel':
-        try:
-            chat = await bot.get_chat(link)
-            member = await bot.get_chat_member(chat.id, bot.id)
-            if member.status not in ['administrator', 'creator']:
-                return await message.answer("❌ ቦቱ ቻናሉ ውስጥ አድሚን አይደለም። እባክህ 'Administrator' አድርገህ እንደገና ሞክር።")
-        except Exception as e:
-            return await message.answer("❌ ቻናሉን ማግኘት አልቻልኩም። ሊንኩን በትክክል መላክዎን ያረጋግጡ።")
-            
-    await state.update_data(link=link)
-    await message.answer("💸 ስንት ሰው እንዲቀላቀሉ ይፈልጋሉ? (ቢያንስ 10 ሰው፣ ለአንድ ሰው 0.5 ብር)")
-    await state.set_state(AdvertiseState.waiting_for_members)
+# ቻናል ማረጋገጫ እና ሌሎች ሂደቶች እዚህ ይገባሉ...
+# (ከዚህ ቀደም የሰራነው የአድሚንነት ማረጋገጫ ሎጂክ እዚህ ይጨመራል)
 
-# 4. የሰዎች ብዛት እና ማጠቃለያ (አድሚን ማሳወቅ)
-@router.message(AdvertiseState.waiting_for_members)
-async def finalize_ad(message: Message, state: FSMContext, bot: Bot):
-    if not message.text.isdigit() or int(message.text) < 10:
-        return await message.answer("❌ እባክህ ትክክለኛ ቁጥር ላክ (ቢያንስ 10 ሰው)።")
-    
-    members = int(message.text)
-    total_price = members * 0.5
-    data = await state.get_data()
-    
-    # ዳታቤዝ ላይ ማስቀመጥ
+@router.message(F.text == "📊 My Ads")
+async def show_my_ads(message: Message):
     conn = get_db()
     with conn.cursor() as cur:
-        cur.execute("INSERT INTO ads (user_id, link, target_count, price, status) VALUES (%s, %s, %s, %s, 'pending')",
-                    (message.from_user.id, data['link'], members, total_price))
-        conn.commit()
+        cur.execute("SELECT * FROM ads WHERE user_id = %s", (message.from_user.id,))
+        ads = cur.fetchall()
     conn.close()
     
-    await message.answer(f"✅ ማስታወቂያዎ ለ{data['adv_type']} ተመዝግቧል! አድሚን ሲያጸድቀው ይጀምራል።\n\n💵 ጠቅላላ ክፍያ: {total_price} ብር።")
+    if not ads:
+        return await message.answer("❌ እስካሁን ምንም ማስታወቂያ የለዎትም።")
     
-    # ለአድሚን ማሳወቅ
-    try:
-        await bot.send_message(ADMIN_ID, f"📢 አዲስ ማስታወቂያ!\n👤 User: {message.from_user.id}\n📍 አይነት: {data['adv_type']}\n🔗 Link: {data['link']}\n👥 አባላት: {members}\n💰 ክፍያ: {total_price} ብር")
-    except:
-        pass
-    
-    await state.clear()
+    for ad in ads:
+        # ad[0]=id, ad[2]=link, ad[3]=target, ad[4]=current, ad[5]=price, ad[6]=status
+        msg = (f"📊 የማስታወቂያ ሁኔታ\n\n🆔 Task ID: {ad[0]}\n🔗 Link: {ad[2]}\n"
+               f"👥 Remaining: {ad[3]-ad[4]}/{ad[3]}\n✅ Completed: {ad[4]}\n"
+               f"💵 Spent: {ad[4] * 0.5} Birr")
+        await message.answer(msg)
