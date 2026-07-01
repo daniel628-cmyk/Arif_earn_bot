@@ -33,15 +33,15 @@ async def check_channel(message: Message, state: FSMContext, bot: Bot):
             return await message.answer("❌ ቦቱ ቻናሉ ውስጥ አድሚን አይደለም። አድሚን አድርገው ይሞክሩ።")
         
         await state.update_data(link=message.text)
-        await message.answer("3️⃣ 💸 ስንት ሰው እንዲቀላቀሉ ይፈልጋሉ?\n(ለአንድ ሰው 0.5 ብር፣ ዝቅተኛ 1 - ከፍተኛ 5 ሰው።)")
+        await message.answer("3️⃣ 💸 ስንት ሰው እንዲቀላቀሉ ይፈልጋሉ?\n(ለአንድ ሰው 0.5 ብር፣ ዝቅተኛ 5 - ከፍተኛ 100 ሰው።)")
         await state.set_state(AdvertiseState.waiting_for_members)
     except:
         await message.answer("❌ ቻናሉን ማግኘት አልቻልኩም።")
 
 @router.message(AdvertiseState.waiting_for_members)
 async def get_members(message: Message, state: FSMContext):
-    if not message.text.isdigit() or not (1 <= int(message.text) <= 5):
-        return await message.answer("❌ እባክህ ከ 1 እስከ 5 ባለው ቁጥር ብቻ ላክ።")
+    if not message.text.isdigit() or not (5 <= int(message.text) <= 100):
+        return await message.answer("❌ እባክህ ከ 5 እስከ 100 ባለው ቁጥር ብቻ ላክ።")
     
     members = int(message.text)
     price_per_user = 0.5
