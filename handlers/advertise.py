@@ -12,66 +12,49 @@ class AdvertiseState(StatesGroup):
     waiting_for_members = State()
 
 @router.message(F.text == "📣 Advertise")
-async def advertise_menu(message: Message):
+async def start_advertise(message: Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Channel", callback_data="adv_type_channel"),
-         InlineKeyboardButton(text="🤖 Bot", callback_data="adv_type_bot")]
+        [InlineKeyboardButton(text="📢 Channel", callback_data="adv_channel"),
+         InlineKeyboardButton(text="🤖 Bot", callback_data="adv_bot")]
     ])
     await message.answer("📢 ምን ማስተዋወቅ ይፈልጋሉ?", reply_markup=kb)
 
-@router.callback_query(F.data.startswith("adv_type_"))
-async def set_type(call: CallbackQuery, state: FSMContext):
-    adv_type = call.data.split("_")[2]
-    await state.update_data(adv_type=adv_type)
-    
-    if adv_type == 'channel':
-        await call.message.answer("🔗 ቻናሉ ላይ Bot Admin ያድርጉ። ከዛ ቻናል ሊንክ (ለምሳሌ @username) ይላኩ።")
-        await state.set_state(AdvertiseState.waiting_for_link)
-    else:
-        await call.message.answer("🔎 ማስተዋወቅ የሚፈልጉትን የቦት Message Forward ያድርጉ:")
-        await state.set_state(AdvertiseState.waiting_for_bot_msg)
-    await call.answer()
+@router.callback_query(F.data.startswith("adv_"))
+async def get_ad_type(callback: CallbackQuery, state: FSMContext):
+    adv_type = callback.data.split("_")[1]
+    await state.update_data(type=adv_type)
+    await callback.message.answer("🔗 ሊንኩን ይላኩ (ለቻናል @username, ለቦት ሊንክ):")
+    await state.set_state(AdvertiseState.waiting_for_link)
+    await callback.answer()
 
-# ቻናል ማረጋገጫ (Admin Check)
-@router.message(AdvertiseState.waiting_for_link)
-async def check_link(message: Message, state: FSMContext, bot: Bot):
-    link = message.text.replace("https://t.me/", "@")
-    try:
-        chat = await bot.get_chat(link)
-        member = await bot.get_chat_member(chat.id, bot.id)
-        if member.status not in ['administrator', 'creator']:
-            return await message.answer("❌ ቦቱ ቻናሉ ውስጥ አድሚን አይደለም። እባክህ 'Administrator' አድርገህ እንደገና ሞክር።")
-        
-        await state.update_data(link=link)
-        await message.answer("💸 ስንት ሰው እንዲቀላቀሉ ይፈልጋሉ? (ቢያንስ 10 ሰው፣ ለአንድ ሰው 0.5 ብር)")
-        await state.set_state(AdvertiseState.waiting_for_members)
-    except Exception as e:
-        await message.answer("❌ ቻናሉን ማግኘት አልቻልኩም። ሊንኩን በትክክል መላክዎን ያረጋግጡ።")
-
-# ማጠቃለያ እና አድሚን ማሳወቂያ
 @router.message(AdvertiseState.waiting_for_members)
-async def finalize_ad(message: Message, state: FSMContext, bot: Bot):
+async def process_members(message: Message, state: FSMContext, bot: Bot):
     if not message.text.isdigit() or int(message.text) < 10:
-        return await message.answer("❌ እባክህ ትክክለኛ ቁጥር ላክ (ቢያንስ 10 ሰው)።")
+        return await message.answer("❌ ቢያንስ 10 ሰው ማዘዝ አለብዎት። ቁጥር ብቻ ያስገቡ።")
     
-    members = int(message.text)
-    total_price = members * 0.5
+    num_users = int(message.text)
+    total_price = num_users * 0.5
     data = await state.get_data()
     
-    # ዳታቤዝ ላይ ማስቀመጥ
     conn = get_db()
-    with conn.cursor() as cur:
-        cur.execute("INSERT INTO ads (user_id, link, target_count, price, status) VALUES (%s, %s, %s, %s, 'pending')",
-                    (message.from_user.id, data['link'], members, total_price))
+    cur = conn.cursor()
+    
+    # 1. ባላንስ መፈተሽ
+    cur.execute("SELECT amount FROM balances WHERE user_id = %s", (message.from_user.id,))
+    balance_row = cur.fetchone()
+    balance = balance_row[0] if balance_row else 0
+    
+    if balance >= total_price:
+        # 2. ባላንስ ከበቃ ማስታወቂያውን አስጀምር
+        cur.execute("UPDATE balances SET amount = amount - %s WHERE user_id = %s", (total_price, message.from_user.id))
+        cur.execute("INSERT INTO ads (user_id, link, target_count, current_count, price, status, type) VALUES (%s, %s, %s, 0, %s, 'active', %s)", 
+                    (message.from_user.id, data['link'], num_users, total_price, data['type']))
         conn.commit()
+        await message.answer(f"✅ ማስታወቂያዎ ተጀምሯል! \n💰 {total_price} ብር ተቀንሷል።")
+    else:
+        # 3. ባላንስ ከሌለ ለአድሚን
+        await message.answer("⚠️ በቂ ባላንስ የለዎትም። እባክዎ @Arif_Support ያናግሩ።")
+        await bot.send_message(ADMIN_ID, f"⚠️ ተጠቃሚ {message.from_user.id} ማስታወቂያ ለመለጠፍ ክፍያ ይፈልጋል።")
+        
     conn.close()
-    
-    await message.answer(f"✅ ማስታወቂያዎ ለ{data['adv_type']} ተመዝግቧል! አድሚን ሲያጸድቀው ይጀምራል።\n\n💵 ጠቅላላ ክፍያ: {total_price} ብር።")
-    
-    # ለአድሚን ማሳወቅ (በዚህ ክፍል ነው አድሚን ጋር መድረስ ያለበት)
-    try:
-        await bot.send_message(ADMIN_ID, f"📢 አዲስ ማስታወቂያ!\n👤 User: {message.from_user.id}\n📍 አይነት: {data['adv_type']}\n🔗 Link: {data['link']}\n👥 አባላት: {members}\n💰 ክፍያ: {total_price} ብር")
-    except Exception as e:
-        print(f"Error sending to admin: {e}")
-    
     await state.clear()
