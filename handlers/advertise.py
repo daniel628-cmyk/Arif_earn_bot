@@ -1,10 +1,9 @@
-import re
 from aiogram import Router, F, Bot
-from aiogram.types import Message
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from db import get_db
-from config import ADMIN_ID  # ADMIN_ID ከ config ፋይል ይመጣል
+from config import ADMIN_ID
 
 router = Router()
 
@@ -12,31 +11,49 @@ class AdvertiseState(StatesGroup):
     waiting_for_link = State()
     waiting_for_members = State()
 
+# 1. መጀመሪያ ተጠቃሚው እንዲመርጥ ማድረግ
 @router.message(F.text == "📣 Advertise")
-async def start_advertise(message: Message, state: FSMContext):
-    await message.answer("🔗 ማስተዋወቅ የሚፈልጉትን የቻናል ሊንክ ይላኩ።")
+async def start_advertise(message: Message):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📢 Channel", callback_data="adv_channel")],
+        [InlineKeyboardButton(text="🤖 Bot", callback_data="adv_bot")]
+    ])
+    await message.answer("📢 ምን ማስተዋወቅ ይፈልጋሉ? ከታች ካሉት አማራጮች ይምረጡ፡", reply_markup=keyboard)
+
+# 2. ምርጫውን ሲጫን
+@router.callback_query(F.data.startswith("adv_"))
+async def choose_type(callback: CallbackQuery, state: FSMContext):
+    adv_type = callback.data.split("_")[1] # channel ወይም bot
+    await state.update_data(adv_type=adv_type)
+    
+    await callback.message.edit_text(f"✅ {adv_type.upper()} መርጠዋል።\n🔗 ማስተዋወቅ የሚፈልጉትን ሊንክ ይላኩ፡")
     await state.set_state(AdvertiseState.waiting_for_link)
+    await callback.answer()
 
+# 3. ሊንክ መቀበል እና ቻናል ከሆነ አድሚንነት ማረጋገጥ
 @router.message(AdvertiseState.waiting_for_link)
-async def check_channel(message: Message, state: FSMContext, bot: Bot):
-    channel_link = message.text.replace("https://t.me/", "@")
-    try:
-        chat = await bot.get_chat(channel_link)
-        # አድሚን መሆኑን ማረጋገጥ
-        member = await bot.get_chat_member(chat.id, bot.id)
-        if member.status not in ['administrator', 'creator']:
-            return await message.answer("❌ ቦቱ ቻናሉ ውስጥ አድሚን አይደለም። እባክህ 'Administrator' አድርገህ እንደገና ሞክር።")
-        
-        await state.update_data(link=channel_link, chat_id=chat.id)
-        await message.answer("💸 ስንት ሰው እንዲቀላቀሉ ይፈልጋሉ? (ቢያንስ 10 ሰው፣ ለአንድ ሰው 0.5 ብር)")
-        await state.set_state(AdvertiseState.waiting_for_members)
-    except Exception as e:
-        await message.answer(f"❌ ቻናሉን ማግኘት አልቻልኩም። ሊንኩ ትክክል መሆኑን እና ቦቱ ቻናሉ ውስጥ መኖሩን ያረጋግጡ።")
+async def check_link(message: Message, state: FSMContext, bot: Bot):
+    data = await state.get_data()
+    link = message.text.replace("https://t.me/", "@")
+    
+    if data['adv_type'] == 'channel':
+        try:
+            chat = await bot.get_chat(link)
+            member = await bot.get_chat_member(chat.id, bot.id)
+            if member.status not in ['administrator', 'creator']:
+                return await message.answer("❌ ቦቱ ቻናሉ ውስጥ አድሚን አይደለም። እባክህ 'Administrator' አድርገህ እንደገና ሞክር።")
+        except Exception as e:
+            return await message.answer("❌ ቻናሉን ማግኘት አልቻልኩም። ሊንኩን በትክክል መላክዎን ያረጋግጡ።")
+            
+    await state.update_data(link=link)
+    await message.answer("💸 ስንት ሰው እንዲቀላቀሉ ይፈልጋሉ? (ቢያንስ 10 ሰው፣ ለአንድ ሰው 0.5 ብር)")
+    await state.set_state(AdvertiseState.waiting_for_members)
 
+# 4. የሰዎች ብዛት እና ማጠቃለያ (አድሚን ማሳወቅ)
 @router.message(AdvertiseState.waiting_for_members)
-async def get_members(message: Message, state: FSMContext, bot: Bot):
+async def finalize_ad(message: Message, state: FSMContext, bot: Bot):
     if not message.text.isdigit() or int(message.text) < 10:
-        return await message.answer("❌ እባክህ ትክክለኛ ቁጥር ላክ (ቢያንስ 10 ሰው መሆን አለበት)።")
+        return await message.answer("❌ እባክህ ትክክለኛ ቁጥር ላክ (ቢያንስ 10 ሰው)።")
     
     members = int(message.text)
     total_price = members * 0.5
@@ -50,13 +67,12 @@ async def get_members(message: Message, state: FSMContext, bot: Bot):
         conn.commit()
     conn.close()
     
-    # ለተጠቃሚው ማሳወቅ
-    await message.answer(f"✅ ማስታወቂያዎ በተሳካ ሁኔታ ተመዝግቧል! አድሚን ሲያጸድቀው ይጀምራል።\n\n💵 ጠቅላላ ክፍያ: {total_price} ብር።")
+    await message.answer(f"✅ ማስታወቂያዎ ለ{data['adv_type']} ተመዝግቧል! አድሚን ሲያጸድቀው ይጀምራል።\n\n💵 ጠቅላላ ክፍያ: {total_price} ብር።")
     
-    # ለአድሚን መላክ (ይህ ክፍል ነው አሁን እየሰራ ያልነበረው)
+    # ለአድሚን ማሳወቅ
     try:
-        await bot.send_message(ADMIN_ID, f"📢 አዲስ ማስታወቂያ!\n👤 የተጠቃሚ ID: {message.from_user.id}\n🔗 ቻናል: {data['link']}\n👥 አባላት: {members}\n💰 ክፍያ: {total_price} ብር\n\nእባክዎ ዳታቤዝ ውስጥ ገብተው ያረጋግጡ።")
-    except Exception as e:
-        print(f"Admin-ን ለማሳወቅ አልተቻለም: {e}")
+        await bot.send_message(ADMIN_ID, f"📢 አዲስ ማስታወቂያ!\n👤 User: {message.from_user.id}\n📍 አይነት: {data['adv_type']}\n🔗 Link: {data['link']}\n👥 አባላት: {members}\n💰 ክፍያ: {total_price} ብር")
+    except:
+        pass
     
     await state.clear()
