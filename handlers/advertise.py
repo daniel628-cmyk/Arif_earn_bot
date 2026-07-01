@@ -61,7 +61,7 @@ async def process_members(message: Message, state: FSMContext, bot: Bot):
         conn.commit()
         await message.answer(f"✅ ማስታወቂያዎ ተጀምሯል!\n💰 {total_price} ብር ተቀንሷል።")
     else:
-        await message.answer("⚠️ በቂ ባላንስ የለዎትም። እባክዎ @Arif_Support ያናግሩ።")
+        await message.answer("⚠️ በቂ ባላንስ የለዎትም። እባክዎ @Ariff_Support ያናግሩ።")
         await bot.send_message(ADMIN_ID, f"⚠️ ተጠቃሚ {message.from_user.id} ማስታወቂያ ለመለጠፍ {total_price} ብር ክፍያ ይፈልጋል።")
         
     conn.close()
