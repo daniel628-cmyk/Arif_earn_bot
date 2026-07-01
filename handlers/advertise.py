@@ -32,6 +32,7 @@ async def get_ad_type(callback: CallbackQuery, state: FSMContext):
 async def check_link(message: Message, state: FSMContext, bot: Bot):
     link = message.text.strip()
     try:
+        # ቻናል ወይም ቦት መሆኑን ለመለየት ይሞክራል
         chat = await bot.get_chat(link)
         await state.update_data(link=link)
         await message.answer("💸 ስንት ሰው እንዲቀላቀሉ ይፈልጋሉ? (ቢያንስ 10 ሰው፣ ለአንድ ሰው 0.5 ብር)")
@@ -61,8 +62,22 @@ async def process_members(message: Message, state: FSMContext, bot: Bot):
         conn.commit()
         await message.answer(f"✅ ማስታወቂያዎ ተጀምሯል!\n💰 {total_price} ብር ተቀንሷል።")
     else:
+        # ተጠቃሚው ባላንስ ከሌለው አድሚን ጋር የሚላከው መረጃ
+        user_mention = message.from_user.username
+        user_info = f"@{user_mention}" if user_mention else f"ID: {message.from_user.id}"
+        
         await message.answer("⚠️ በቂ ባላንስ የለዎትም። እባክዎ @Ariff_Support ያናግሩ።")
-        await bot.send_message(ADMIN_ID, f"⚠️ ተጠቃሚ {message.from_user.id} ማስታወቂያ ለመለጠፍ {total_price} ብር ክፍያ ይፈልጋል።")
+        
+        # ለአድሚን የሚላከው ዝርዝር መረጃ
+        await bot.send_message(
+            ADMIN_ID, 
+            f"⚠️ **ማስታወቂያ ክፍያ ይፈልጋል!**\n\n"
+            f"👤 ተጠቃሚ: {user_info}\n"
+            f"🆔 User ID: {message.from_user.id}\n"
+            f"💰 የሚፈለግ ክፍያ: {total_price} ብር\n"
+            f"🔗 ሊንክ: {data['link']}\n"
+            f"📍 አይነት: {data['type']}"
+        )
         
     conn.close()
     await state.clear()
