@@ -8,3 +8,5 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 # የAdmin Telegram ID
 ADMIN_ID =6422653762
+
+BOT_USERNAME = "Ariff_earn_bot"
