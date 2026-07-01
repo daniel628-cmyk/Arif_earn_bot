@@ -1,3 +1,4 @@
+import re
 from aiogram import Router, F, Bot
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -23,38 +24,45 @@ async def start_advertise(message: Message):
 async def get_ad_type(callback: CallbackQuery, state: FSMContext):
     adv_type = callback.data.split("_")[1]
     await state.update_data(type=adv_type)
-    await callback.message.answer("🔗 ሊንኩን ይላኩ (ለቻናል @username, ለቦት ሊንክ):")
+    await callback.message.answer("🔗 ሊንኩን ይላኩ (ለቻናል @username፣ ለቦት ሊንክ):")
     await state.set_state(AdvertiseState.waiting_for_link)
     await callback.answer()
+
+@router.message(AdvertiseState.waiting_for_link)
+async def check_link(message: Message, state: FSMContext, bot: Bot):
+    link = message.text.strip()
+    try:
+        chat = await bot.get_chat(link)
+        await state.update_data(link=link)
+        await message.answer("💸 ስንት ሰው እንዲቀላቀሉ ይፈልጋሉ? (ቢያንስ 10 ሰው፣ ለአንድ ሰው 0.5 ብር)")
+        await state.set_state(AdvertiseState.waiting_for_members)
+    except:
+        await message.answer("❌ ቻናሉን/ቦቱን ማግኘት አልቻልኩም። ሊንኩን በትክክል በ @username መልክ ይላኩ።")
 
 @router.message(AdvertiseState.waiting_for_members)
 async def process_members(message: Message, state: FSMContext, bot: Bot):
     if not message.text.isdigit() or int(message.text) < 10:
         return await message.answer("❌ ቢያንስ 10 ሰው ማዘዝ አለብዎት። ቁጥር ብቻ ያስገቡ።")
     
-    num_users = int(message.text)
-    total_price = num_users * 0.5
+    num = int(message.text)
+    total_price = num * 0.5
     data = await state.get_data()
     
     conn = get_db()
     cur = conn.cursor()
-    
-    # 1. ባላንስ መፈተሽ
     cur.execute("SELECT amount FROM balances WHERE user_id = %s", (message.from_user.id,))
-    balance_row = cur.fetchone()
-    balance = balance_row[0] if balance_row else 0
+    row = cur.fetchone()
+    balance = row[0] if row else 0
     
     if balance >= total_price:
-        # 2. ባላንስ ከበቃ ማስታወቂያውን አስጀምር
         cur.execute("UPDATE balances SET amount = amount - %s WHERE user_id = %s", (total_price, message.from_user.id))
         cur.execute("INSERT INTO ads (user_id, link, target_count, current_count, price, status, type) VALUES (%s, %s, %s, 0, %s, 'active', %s)", 
-                    (message.from_user.id, data['link'], num_users, total_price, data['type']))
+                    (message.from_user.id, data['link'], num, total_price, data['type']))
         conn.commit()
-        await message.answer(f"✅ ማስታወቂያዎ ተጀምሯል! \n💰 {total_price} ብር ተቀንሷል።")
+        await message.answer(f"✅ ማስታወቂያዎ ተጀምሯል!\n💰 {total_price} ብር ተቀንሷል።")
     else:
-        # 3. ባላንስ ከሌለ ለአድሚን
         await message.answer("⚠️ በቂ ባላንስ የለዎትም። እባክዎ @Arif_Support ያናግሩ።")
-        await bot.send_message(ADMIN_ID, f"⚠️ ተጠቃሚ {message.from_user.id} ማስታወቂያ ለመለጠፍ ክፍያ ይፈልጋል።")
+        await bot.send_message(ADMIN_ID, f"⚠️ ተጠቃሚ {message.from_user.id} ማስታወቂያ ለመለጠፍ {total_price} ብር ክፍያ ይፈልጋል።")
         
     conn.close()
     await state.clear()
