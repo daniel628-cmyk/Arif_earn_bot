@@ -1,4 +1,3 @@
-import re
 from aiogram import Router, F, Bot
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -36,15 +35,17 @@ async def check_link(message: Message, state: FSMContext, bot: Bot):
         await state.update_data(link=link)
         await message.answer("💸 ስንት ሰው እንዲቀላቀሉ ይፈልጋሉ? (ቢያንስ 10 ሰው፣ ለአንድ ሰው 0.5 ብር)")
         await state.set_state(AdvertiseState.waiting_for_members)
-    except Exception as e:
+    except Exception:
         await message.answer("❌ ቻናሉን/ቦቱን ማግኘት አልቻልኩም። ሊንኩን በትክክል በ @username መልክ ይላኩ።")
 
 @router.message(AdvertiseState.waiting_for_members)
 async def process_members(message: Message, state: FSMContext, bot: Bot):
-    if not message.text.isdigit() or int(message.text) < 10:
-        return await message.answer("❌ ቢያንስ 10 ሰው ማዘዝ አለብዎት። ቁጥር ብቻ ያስገቡ።")
-    
+    if not message.text.isdigit():
+        return await message.answer("❌ እባክዎ ቁጥር ብቻ ያስገቡ።")
     num = int(message.text)
+    if num < 10:
+        return await message.answer("❌ ቢያንስ 10 ሰው ማዘዝ አለብዎት።")
+    
     total_price = num * 0.5
     data = await state.get_data()
     adv_type = data.get('type')
@@ -62,26 +63,7 @@ async def process_members(message: Message, state: FSMContext, bot: Bot):
         conn.commit()
         await message.answer(f"✅ ማስታወቂያዎ ተጀምሯል!\n💰 {total_price} ብር ተቀንሷል።")
     else:
-        user_mention = message.from_user.username
-        user_info = f"@{user_mention}" if user_mention else f"ID: {message.from_user.id}"
-        
         await message.answer("⚠️ በቂ ባላንስ የለዎትም። እባክዎ @Ariff_Support ያናግሩ።")
-        
-        # DEBUGGING: ለአድሚን የመላክ ሂደት በሎግ ላይ እንዲታይ ይደረጋል
-        try:
-            print(f"DEBUG: Attempting to notify ADMIN_ID {ADMIN_ID} about user {user_info}")
-            await bot.send_message(
-                ADMIN_ID, 
-                f"⚠️ **ማስታወቂያ ክፍያ ይፈልጋል!**\n\n"
-                f"👤 ተጠቃሚ: {user_info}\n"
-                f"🆔 User ID: {message.from_user.id}\n"
-                f"💰 የሚፈለግ ክፍያ: {total_price} ብር\n"
-                f"🔗 ሊንክ: {data['link']}\n"
-                f"📍 አይነት: {adv_type.upper()}" 
-            )
-            print("DEBUG: Admin notified successfully.")
-        except Exception as e:
-            print(f"DEBUG: Error sending to admin: {e}")
         
     conn.close()
     await state.clear()
