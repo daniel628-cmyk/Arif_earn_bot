@@ -32,7 +32,6 @@ async def get_ad_type(callback: CallbackQuery, state: FSMContext):
 async def check_link(message: Message, state: FSMContext, bot: Bot):
     link = message.text.strip()
     try:
-        # ለቻናልም ለቦትም ሊንኩ መኖሩን ያረጋግጣል
         await bot.get_chat(link)
         await state.update_data(link=link)
         await message.answer("💸 ስንት ሰው እንዲቀላቀሉ ይፈልጋሉ? (ቢያንስ 10 ሰው፣ ለአንድ ሰው 0.5 ብር)")
@@ -65,18 +64,10 @@ async def process_members(message: Message, state: FSMContext, bot: Bot):
     else:
         user_mention = message.from_user.username
         user_info = f"@{user_mention}" if user_mention else f"ID: {message.from_user.id}"
-        
         await message.answer("⚠️ በቂ ባላንስ የለዎትም። እባክዎ @Ariff_Support ያናግሩ።")
-        
-        # ለአድሚን ማሳወቂያ
         await bot.send_message(
             ADMIN_ID, 
-            f"⚠️ **ማስታወቂያ ክፍያ ይፈልጋል!**\n\n"
-            f"👤 ተጠቃሚ: {user_info}\n"
-            f"🆔 User ID: {message.from_user.id}\n"
-            f"💰 የሚፈለግ ክፍያ: {total_price} ብር\n"
-            f"🔗 ሊንክ: {data['link']}\n"
-            f"📍 አይነት: {adv_type.upper()}" 
+            f"⚠️ **ማስታወቂያ ክፍያ ይፈልጋል!**\n\n👤 ተጠቃሚ: {user_info}\n🆔 User ID: {message.from_user.id}\n💰 የሚፈለግ ክፍያ: {total_price} ብር\n🔗 ሊንክ: {data['link']}\n📍 አይነት: {adv_type.upper()}"
         )
         
     conn.close()
