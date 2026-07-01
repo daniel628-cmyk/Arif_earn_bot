@@ -22,7 +22,7 @@ def is_valid_telegram_link(link):
 # ማስታወቂያ ስራ የሚጀምርበት
 @router.message(F.text == "📣 Advertise")
 async def start_advertise(message: Message, state: FSMContext):
-    await message.answer("📢 ለማስተዋወቅ የሚፈልጉትን የቻናል ሊንክ (ለምሳሌ: https://t.me/username) ይላኩ።")
+    await message.answer("📢 ለማስተዋወቅ የሚፈልጉትን የቻናል ሊንክ (ለምሳሌ: https://t.me/የቻናል user name) ይላኩ።")
     await state.set_state(AdvertiseState.waiting_for_link)
 
 # ሊንኩን መቀበል
