@@ -1,5 +1,12 @@
 from aiogram import Router, F, Bot
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import (
+    Message, 
+    InlineKeyboardMarkup, 
+    InlineKeyboardButton, 
+    ReplyKeyboardMarkup, 
+    KeyboardButton,
+    CallbackQuery   # ← Fixed import
+)
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from db import get_db
@@ -147,7 +154,7 @@ async def reject_withdraw(callback: CallbackQuery, bot: Bot):
         user_id = int(user_id)
         amount = float(amount)
 
-        # Refund to earned balance
+        # Refund
         conn = get_db()
         with conn.cursor() as cur:
             cur.execute("UPDATE balances SET earned_balance = earned_balance + %s WHERE user_id = %s", (amount, user_id))
