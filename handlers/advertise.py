@@ -3,10 +3,11 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from db import get_db
+from config import ADMIN_ID  # ADMIN_ID ከ config ፋይል መምጣቱን አረጋግጥ
 
 router = Router()
 
-# ዋናው ሜኑ (ተጠቃሚው ማስታወቂያ ሲሰርዝ ወደዚህ ይመለሳል)
+# ዋናው ሜኑ (ተጠቃሚው ማስታወቂያ ሲሰርዝ ወይም ሲጨርስ ወደዚህ ይመለሳል)
 def get_main_kb():
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text="📢 Join Channels"), KeyboardButton(text="🤖 Join Bots")],
@@ -47,6 +48,9 @@ async def get_ad_type(callback: CallbackQuery, state: FSMContext):
 
 @router.message(AdvertiseState.waiting_for_link)
 async def check_link(message: Message, state: FSMContext, bot: Bot):
+    if message.text == "❌ Cancel":
+        return await cancel_process(message, state)
+        
     link = message.text.strip()
     try:
         await bot.get_chat(link)
@@ -58,6 +62,9 @@ async def check_link(message: Message, state: FSMContext, bot: Bot):
 
 @router.message(AdvertiseState.waiting_for_members)
 async def process_members(message: Message, state: FSMContext, bot: Bot):
+    if message.text == "❌ Cancel":
+        return await cancel_process(message, state)
+        
     if not message.text.isdigit():
         return await message.answer("❌ እባክዎ ቁጥር ብቻ ያስገቡ።")
     num = int(message.text)
@@ -81,7 +88,19 @@ async def process_members(message: Message, state: FSMContext, bot: Bot):
         conn.commit()
         await message.answer(f"✅ ማስታወቂያዎ ተጀምሯል!\n💰 {total_price} ብር ተቀንሷል።", reply_markup=get_main_kb())
     else:
+        # ባላንስ በሌለበት ጊዜ ለአድሚን ማሳወቂያ መላክ
         await message.answer("⚠️ በቂ ባላንስ የለዎትም። እባክዎ @Ariff_Support ያናግሩ።", reply_markup=get_main_kb())
+        
+        admin_text = (
+            f"🚨 አዲስ የማስታወቂያ ሙከራ (ባላንስ የለም)\n\n"
+            f"👤 ተጠቃሚ: {message.from_user.full_name} (@{message.from_user.username})\n"
+            f"💰 የሚፈለግ: {total_price} ብር\n"
+            f"📉 ያለው: {balance} ብር"
+        )
+        try:
+            await bot.send_message(ADMIN_ID, admin_text)
+        except Exception as e:
+            print(f"አድሚን ማሳወቂያ መላክ አልተቻለም: {e}")
         
     conn.close()
     await state.clear()
