@@ -58,7 +58,7 @@ async def verify_channel_callback(callback: CallbackQuery, bot: Bot):
             # ተጠናቀቀ ብሎ መዝገብ
             cur.execute("INSERT INTO completed_ads (user_id, ad_id) VALUES (%s, %s)", (user_id, ad_id))
             conn.commit()
-            await callback.answer("✅ ተረጋግጧል! 0.5 ብር ወደ ባላንስዎ ተጨምሯል!", show_alert=True)
+            await callback.answer("✅ ተረጋግጧል! 0.30 ብር ወደ ባላንስዎ ተጨምሯል!", show_alert=True)
         else:
             await callback.answer("❌ ገና አልተቀላቀሉም!", show_alert=True)
     conn.close()
