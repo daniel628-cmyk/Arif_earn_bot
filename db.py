@@ -37,7 +37,7 @@ def init_db():
                 );
             """)
 
-            # === Completed Tasks (prevent double earning) ===
+            # === Completed Tasks ===
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS completed_ads(
                     id SERIAL PRIMARY KEY,
@@ -48,7 +48,18 @@ def init_db():
                 );
             """)
 
-            # === Bots Table (for Join Bots feature) ===
+            # === Referrals Table (New) ===
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS referrals(
+                    id SERIAL PRIMARY KEY,
+                    referrer_id BIGINT,
+                    referred_id BIGINT UNIQUE,
+                    reward_given BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
+            # === Bots Table ===
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS bots(
                     id SERIAL PRIMARY KEY,
@@ -60,7 +71,7 @@ def init_db():
                 );
             """)
 
-            # Optional: Channels table (if you still need it)
+            # === Channels Table ===
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS channels(
                     id SERIAL PRIMARY KEY, 
@@ -82,9 +93,8 @@ def init_db():
         conn.close()
 
 
-# Legacy function (kept for backward compatibility)
+# Legacy function
 def update_and_check_limit(table_name, task_id):
-    """Old function - consider using AdsManager instead"""
     conn = get_db()
     try:
         with conn.cursor() as cur:
