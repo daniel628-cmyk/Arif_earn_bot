@@ -129,7 +129,7 @@ async def process_target(message: Message, state: FSMContext, bot: Bot):
             f"Required: {price} Birr\n"
             f"Your balance: {total_balance} Birr\n\n"
             f"Please deposit and try again.\n"
-            f"Contact Admin: @YourAdminUsername"
+            f"Contact Admin:@Ariff_Support "
         )
         # Notify Admin
         try:
