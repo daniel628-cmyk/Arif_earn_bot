@@ -1,8 +1,18 @@
+from aiogram import Router, F, Bot
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from db import get_db
+# ከዚህ በፊት የነበሩትን import-ዎችህን በዚህ አስገባ
+from utils.checks import check_user_sub 
+
+# 1. ይሄ መስመር የግድ ያስፈልጋል!
+router = Router()
+
+# 2. አሁን router ተብሎ ስለተገለጸ ከታች ያሉት ኮዶች ይሰራሉ
 @router.message(F.text == "📢 Join Channels")
 async def show_channels(message: Message):
     conn = get_db()
     with conn.cursor() as cur:
-        # ads ሠንጠረዥ ላይ 'channel' አይነት እና 'active' የሆኑትን ብቻ አምጣ
+        # አሁን ከ ads table ነው መረጃውን የምንስበው
         cur.execute("SELECT id, link FROM ads WHERE type = 'channel' AND status = 'active'")
         ads = cur.fetchall()
     conn.close()
@@ -23,19 +33,17 @@ async def verify_channel_callback(callback: CallbackQuery, bot: Bot):
     
     conn = get_db()
     with conn.cursor() as cur:
-        # አሁንም ከ ads ሠንጠረዥ መረጃውን ስበን እናምጣ
         cur.execute("SELECT link FROM ads WHERE id = %s", (ad_id,))
         res = cur.fetchone()
     conn.close()
     
     if not res:
-        return await callback.answer("❌ ማስታወቂያው ጊዜው አልፎበታል ወይም ተወግዷል።", show_alert=True)
+        return await callback.answer("❌ ማስታወቂያው አልተገኘም።", show_alert=True)
     
     channel_link = res[0]
     
-    # ቻናሉን መፈተሽ (ከዚህ በፊት የነበረህ check_user_sub ተግባር ይሰራል)
+    # ቻናሉን መፈተሽ
     if await check_user_sub(bot, channel_link, callback.from_user.id):
-        # እዚህ ጋር የተጠቃሚውን ባላንስ መጨመር ትችላለህ (ለምሳሌ +0.5 ብር)
         await callback.answer("✅ ተረጋግጧል! ሽልማት ተሰጥቶዎታል!", show_alert=True)
     else:
         await callback.answer("❌ ገና አልተቀላቀሉም!", show_alert=True)
