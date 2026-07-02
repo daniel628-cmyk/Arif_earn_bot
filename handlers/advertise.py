@@ -3,11 +3,11 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from db import get_db
-from config import ADMIN_ID  # ADMIN_ID ከ config ፋይል መምጣቱን አረጋግጥ
+from config import ADMIN_ID
 
 router = Router()
 
-# ዋናው ሜኑ (ተጠቃሚው ማስታወቂያ ሲሰርዝ ወይም ሲጨርስ ወደዚህ ይመለሳል)
+# ዋናው ሜኑ
 def get_main_kb():
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text="📢 Join Channels"), KeyboardButton(text="🤖 Join Bots")],
@@ -32,7 +32,6 @@ async def start_advertise(message: Message):
     ])
     await message.answer("📢 ምን ማስተዋወቅ ይፈልጋሉ?", reply_markup=kb)
 
-# ማስታወቂያን ለመሰረዝ የሚያስችል Handler
 @router.message(F.text == "❌ Cancel")
 async def cancel_process(message: Message, state: FSMContext):
     await state.clear()
@@ -77,25 +76,33 @@ async def process_members(message: Message, state: FSMContext, bot: Bot):
     
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT amount FROM balances WHERE user_id = %s", (message.from_user.id,))
+    # ሁለቱንም ባላንስ አምጣ
+    cur.execute("SELECT deposit_balance, earned_balance FROM balances WHERE user_id = %s", (message.from_user.id,))
     row = cur.fetchone()
-    balance = row[0] if row else 0
+    d_bal = row[0] if row else 0
+    e_bal = row[1] if row else 0
     
-    if balance >= total_price:
-        cur.execute("UPDATE balances SET amount = amount - %s WHERE user_id = %s", (total_price, message.from_user.id))
+    if (d_bal + e_bal) >= total_price:
+        # ቅድሚያ ከ deposit ይቁረጥ
+        if d_bal >= total_price:
+            cur.execute("UPDATE balances SET deposit_balance = deposit_balance - %s WHERE user_id = %s", (total_price, message.from_user.id))
+        else:
+            # ካልበቃ ከ deposit ሙሉውን ውሰድና ቀሪውን ከ earned ይቁረጥ
+            remaining = total_price - d_bal
+            cur.execute("UPDATE balances SET deposit_balance = 0, earned_balance = earned_balance - %s WHERE user_id = %s", (remaining, message.from_user.id))
+        
         cur.execute("INSERT INTO ads (user_id, link, target_count, current_count, price, status, type) VALUES (%s, %s, %s, 0, %s, 'active', %s)", 
                     (message.from_user.id, data['link'], num, total_price, adv_type))
         conn.commit()
         await message.answer(f"✅ ማስታወቂያዎ ተጀምሯል!\n💰 {total_price} ብር ተቀንሷል።", reply_markup=get_main_kb())
     else:
-        # ባላንስ በሌለበት ጊዜ ለአድሚን ማሳወቂያ መላክ
         await message.answer("⚠️ በቂ ባላንስ የለዎትም። እባክዎ @Ariff_Support ያናግሩ።", reply_markup=get_main_kb())
         
         admin_text = (
             f"🚨 አዲስ የማስታወቂያ ሙከራ (ባላንስ የለም)\n\n"
             f"👤 ተጠቃሚ: {message.from_user.full_name} (@{message.from_user.username})\n"
             f"💰 የሚፈለግ: {total_price} ብር\n"
-            f"📉 ያለው: {balance} ብር"
+            f"📉 ያለው (Deposit/Earned): {d_bal}/{e_bal} ብር"
         )
         try:
             await bot.send_message(ADMIN_ID, admin_text)
