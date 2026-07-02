@@ -25,7 +25,11 @@ async def show_channels(message: Message):
             [InlineKeyboardButton(text="📢 ወደ ቻናሉ ሂድ", url=f"https://t.me/{link.replace('@', '')}")],
             [InlineKeyboardButton(text="✅ አረጋግጥ (Verify)", callback_data=f"vc_{ad_id}")]
         ])
-        await message.answer(f"📢 ቻናል: {link}", reply_markup=keyboard)
+        await message.answer(f"📢 ቻናል:🎯 ተልዕኮ:- ቻነሉን ይቀላቀሉ፤ እንዲሁም ንቁ ተሳታፊ ይሁኑ።
+
+
+==================
+❓ ከተቀላቀሉ በኋላ «✅ አድርጊያለሁ»ን ይጫኑ። {link}", reply_markup=keyboard)
 
 @router.callback_query(F.data.startswith("vc_"))
 async def verify_channel_callback(callback: CallbackQuery, bot: Bot):
