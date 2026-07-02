@@ -1,64 +1,48 @@
 from aiogram import Router, F, Bot
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from db import get_db
-from utils.checks import check_user_sub
+from ads_manager import AdsManager
 
-# ይህ መስመር የግድ መኖር አለበት!
 router = Router()
 
 @router.message(F.text == "📢 Join Channels")
 async def show_channels(message: Message):
-    conn = get_db()
-    with conn.cursor() as cur:
-        # ገባሪ የሆኑ ማስታወቂያዎችን ከ ads table አምጣ
-        cur.execute("SELECT id, link FROM ads WHERE type = 'channel' AND status = 'active'")
-        ads = cur.fetchall()
-    conn.close()
-
+    ads = AdsManager.get_active_ads(ad_type="channel")
+    
     if not ads:
-        return await message.answer("❌ በአሁኑ ሰዓት ምንም የሚገኙ ቻናሎች የሉም።")
+        return await message.answer("❌ No active channel campaigns at the moment.")
 
-    for ad_id, link in ads:
-        # ለየቻናሉ Verify button ይፍጠር
+    for ad in ads:
+        ad_id, link, target, current, price, ad_type = ad
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📢 ወደ ቻናሉ ሂድ", url=f"https://t.me/{link.replace('@', '')}")],
-            [InlineKeyboardButton(text="✅ አረጋግጥ (Verify)", callback_data=f"vc_{ad_id}")]
+            [InlineKeyboardButton(text="📢 Join Channel", url=f"https://t.me/{link.replace('@', '')}")],
+            [InlineKeyboardButton(text="✅ Verify", callback_data=f"vc_{ad_id}")]
         ])
-        await message.answer(f"📢 ቻናል: {link}", reply_markup=keyboard)
+        
+        await message.answer(
+            f"📢 Channel: {link}\n"
+            f"Progress: {current}/{target} people", 
+            reply_markup=keyboard
+        )
+
 
 @router.callback_query(F.data.startswith("vc_"))
 async def verify_channel_callback(callback: CallbackQuery, bot: Bot):
     ad_id = int(callback.data.split("_")[1])
     user_id = callback.from_user.id
-    
-    conn = get_db()
-    with conn.cursor() as cur:
-        # 1. ተጠቃሚው ቀድሞ ሰርቶት እንደሆነ ፈትሽ
-        cur.execute("SELECT 1 FROM completed_ads WHERE user_id = %s AND ad_id = %s", (user_id, ad_id))
-        if cur.fetchone():
-            await callback.answer("❌ ይህንን ማስታወቂያ ቀድመው ሰርተውታል!", show_alert=True)
-            conn.close()
-            return
 
-        # 2. የቻናል ሊንኩን አምጣ
-        cur.execute("SELECT link FROM ads WHERE id = %s", (ad_id,))
-        res = cur.fetchone()
+    result = AdsManager.update_ad_progress(ad_id, user_id)
+
+    if result["success"]:
+        await callback.answer(result["message"], show_alert=True)
         
-        if not res:
-            await callback.answer("❌ ማስታወቂያው ጊዜው አልፎበታል!", show_alert=True)
-            conn.close()
-            return
-
-        channel_link = res[0]
-
-        # 3. ቻናል መቀላቀሉን አረጋግጥ
-        if await check_user_sub(bot, channel_link, user_id):
-            # ባላንስ መጨመር
-            cur.execute("UPDATE balances SET amount = amount + 0.30 WHERE user_id = %s", (user_id,))
-            # ተጠናቀቀ ብሎ መዝገብ
-            cur.execute("INSERT INTO completed_ads (user_id, ad_id) VALUES (%s, %s)", (user_id, ad_id))
-            conn.commit()
-            await callback.answer("✅ ተረጋግጧል! 0.30 ብር ወደ ባላንስዎ ተጨምሯል!", show_alert=True)
-        else:
-            await callback.answer("❌ ገና አልተቀላቀሉም!", show_alert=True)
-    conn.close()
+        # Optional: Update the message if campaign completed
+        if result.get("completed"):
+            try:
+                await callback.message.edit_text(
+                    "🎉 This campaign has reached its target and is now closed."
+                )
+            except:
+                pass
+    else:
+        await callback.answer(result["message"], show_alert=True)
