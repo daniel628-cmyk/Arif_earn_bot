@@ -1,6 +1,5 @@
 from aiogram import Router, F, Bot
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from db import get_db
 from ads_manager import AdsManager
 
 router = Router()
@@ -14,6 +13,8 @@ async def show_channels(message: Message):
 
     for ad in ads:
         ad_id, link, target, current, price, ad_type = ad
+        remaining = target - current
+        
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📢 Join Channel", url=f"https://t.me/{link.replace('@', '')}")],
             [InlineKeyboardButton(text="✅ Verify", callback_data=f"vc_{ad_id}")]
@@ -21,7 +22,9 @@ async def show_channels(message: Message):
         
         await message.answer(
             f"📢 Channel: {link}\n"
-            f"Progress: {current}/{target} people", 
+            f"👥 Progress: {current}/{target} people\n"
+            f"⏳ Remaining: **{remaining}** spots\n"
+            f"💰 Reward: 0.30 Birr",
             reply_markup=keyboard
         )
 
@@ -36,7 +39,7 @@ async def verify_channel_callback(callback: CallbackQuery, bot: Bot):
     if result["success"]:
         await callback.answer(result["message"], show_alert=True)
         
-        # Optional: Update the message if campaign completed
+        # Update message if campaign is completed
         if result.get("completed"):
             try:
                 await callback.message.edit_text(
