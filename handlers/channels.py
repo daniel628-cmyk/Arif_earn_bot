@@ -54,7 +54,7 @@ async def verify_channel_callback(callback: CallbackQuery, bot: Bot):
         # 3. ቻናል መቀላቀሉን አረጋግጥ
         if await check_user_sub(bot, channel_link, user_id):
             # ባላንስ መጨመር
-            cur.execute("UPDATE balances SET amount = amount + 0.5 WHERE user_id = %s", (user_id,))
+            cur.execute("UPDATE balances SET amount = amount + 0.30 WHERE user_id = %s", (user_id,))
             # ተጠናቀቀ ብሎ መዝገብ
             cur.execute("INSERT INTO completed_ads (user_id, ad_id) VALUES (%s, %s)", (user_id, ad_id))
             conn.commit()
