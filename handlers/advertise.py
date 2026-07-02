@@ -52,12 +52,21 @@ async def check_link(message: Message, state: FSMContext, bot: Bot):
         
     link = message.text.strip()
     try:
-        await bot.get_chat(link)
+        # 1. ቻናሉን ማግኘት ይሞክር
+        chat = await bot.get_chat(link)
+        
+        # 2. ቦቱ አድሚን መሆኑን ያረጋግጥ
+        member = await bot.get_chat_member(chat.id, bot.id)
+        if member.status not in ['administrator', 'creator']:
+            await message.answer("❌ እባክዎ ቦቱን በመጀመሪያ በቻናሉ ላይ 'Administrator' ያድርጉት።")
+            return
+
         await state.update_data(link=link)
         await message.answer("💸 ስንት ሰው እንዲቀላቀሉ ይፈልጋሉ? (ቢያንስ 10 ሰው፣ ለአንድ ሰው 0.5 ብር)", reply_markup=cancel_kb())
         await state.set_state(AdvertiseState.waiting_for_members)
-    except Exception:
-        await message.answer("❌ ቻናሉን/ቦቱን ማግኘት አልቻልኩም። ሊንኩን በትክክል በ @username መልክ ይላኩ።")
+        
+    except Exception as e:
+        await message.answer("❌ ቻናሉን/ቦቱን ማግኘት አልቻልኩም። ቻናሉ Public መሆኑን እና ቦቱ አድሚን መሆኑን ያረጋግጡ።")
 
 @router.message(AdvertiseState.waiting_for_members)
 async def process_members(message: Message, state: FSMContext, bot: Bot):
@@ -76,18 +85,15 @@ async def process_members(message: Message, state: FSMContext, bot: Bot):
     
     conn = get_db()
     cur = conn.cursor()
-    # ሁለቱንም ባላንስ አምጣ
     cur.execute("SELECT deposit_balance, earned_balance FROM balances WHERE user_id = %s", (message.from_user.id,))
     row = cur.fetchone()
     d_bal = row[0] if row else 0
     e_bal = row[1] if row else 0
     
     if (d_bal + e_bal) >= total_price:
-        # ቅድሚያ ከ deposit ይቁረጥ
         if d_bal >= total_price:
             cur.execute("UPDATE balances SET deposit_balance = deposit_balance - %s WHERE user_id = %s", (total_price, message.from_user.id))
         else:
-            # ካልበቃ ከ deposit ሙሉውን ውሰድና ቀሪውን ከ earned ይቁረጥ
             remaining = total_price - d_bal
             cur.execute("UPDATE balances SET deposit_balance = 0, earned_balance = earned_balance - %s WHERE user_id = %s", (remaining, message.from_user.id))
         
