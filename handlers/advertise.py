@@ -1,11 +1,23 @@
 from aiogram import Router, F, Bot
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from db import get_db
-from config import ADMIN_ID
 
 router = Router()
+
+# ዋናው ሜኑ (ተጠቃሚው ማስታወቂያ ሲሰርዝ ወደዚህ ይመለሳል)
+def get_main_kb():
+    return ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text="📢 Join Channels"), KeyboardButton(text="🤖 Join Bots")],
+        [KeyboardButton(text="💰 Balance"), KeyboardButton(text="💸 Withdraw")],
+        [KeyboardButton(text="📣 Advertise"), KeyboardButton(text="👥 Referrals")],
+        [KeyboardButton(text="ℹ️ Info")]
+    ], resize_keyboard=True)
+
+# የሰርዝ (Cancel) በተን
+def cancel_kb():
+    return ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Cancel")]], resize_keyboard=True)
 
 class AdvertiseState(StatesGroup):
     waiting_for_link = State()
@@ -19,11 +31,17 @@ async def start_advertise(message: Message):
     ])
     await message.answer("📢 ምን ማስተዋወቅ ይፈልጋሉ?", reply_markup=kb)
 
+# ማስታወቂያን ለመሰረዝ የሚያስችል Handler
+@router.message(F.text == "❌ Cancel")
+async def cancel_process(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("✅ ማስታወቂያው ተሰርዟል። ዋናው ሜኑ ላይ ነዎት።", reply_markup=get_main_kb())
+
 @router.callback_query(F.data.startswith("adv_"))
 async def get_ad_type(callback: CallbackQuery, state: FSMContext):
     adv_type = callback.data.split("_")[1]
     await state.update_data(type=adv_type)
-    await callback.message.answer("🔗 ሊንኩን ይላኩ (ለቻናል @username፣ ለቦት ሊንክ):")
+    await callback.message.answer("🔗 ሊንኩን ይላኩ (ለቻናል @username፣ ለቦት ሊንክ):", reply_markup=cancel_kb())
     await state.set_state(AdvertiseState.waiting_for_link)
     await callback.answer()
 
@@ -33,7 +51,7 @@ async def check_link(message: Message, state: FSMContext, bot: Bot):
     try:
         await bot.get_chat(link)
         await state.update_data(link=link)
-        await message.answer("💸 ስንት ሰው እንዲቀላቀሉ ይፈልጋሉ? (ቢያንስ 10 ሰው፣ ለአንድ ሰው 0.5 ብር)")
+        await message.answer("💸 ስንት ሰው እንዲቀላቀሉ ይፈልጋሉ? (ቢያንስ 10 ሰው፣ ለአንድ ሰው 0.5 ብር)", reply_markup=cancel_kb())
         await state.set_state(AdvertiseState.waiting_for_members)
     except Exception:
         await message.answer("❌ ቻናሉን/ቦቱን ማግኘት አልቻልኩም። ሊንኩን በትክክል በ @username መልክ ይላኩ።")
@@ -61,9 +79,9 @@ async def process_members(message: Message, state: FSMContext, bot: Bot):
         cur.execute("INSERT INTO ads (user_id, link, target_count, current_count, price, status, type) VALUES (%s, %s, %s, 0, %s, 'active', %s)", 
                     (message.from_user.id, data['link'], num, total_price, adv_type))
         conn.commit()
-        await message.answer(f"✅ ማስታወቂያዎ ተጀምሯል!\n💰 {total_price} ብር ተቀንሷል።")
+        await message.answer(f"✅ ማስታወቂያዎ ተጀምሯል!\n💰 {total_price} ብር ተቀንሷል።", reply_markup=get_main_kb())
     else:
-        await message.answer("⚠️ በቂ ባላንስ የለዎትም። እባክዎ @Ariff_Support ያናግሩ።")
+        await message.answer("⚠️ በቂ ባላንስ የለዎትም። እባክዎ @Ariff_Support ያናግሩ።", reply_markup=get_main_kb())
         
     conn.close()
     await state.clear()
