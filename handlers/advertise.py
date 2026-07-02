@@ -51,14 +51,20 @@ async def check_link(message: Message, state: FSMContext, bot: Bot):
         return await cancel_process(message, state)
         
     link = message.text.strip()
+    
+    # ሊንኩ @ ምልክት ካልጀመረ አክልለት
+    if not link.startswith("@") and not link.startswith("https://t.me/"):
+        link = f"@{link.lstrip('@')}"
+        
     try:
-        # 1. ቻናሉን ማግኘት ይሞክር
+        # 1. ቻናሉን ወይም ቦቱን ፈልግ
         chat = await bot.get_chat(link)
         
-        # 2. ቦቱ አድሚን መሆኑን ያረጋግጥ
+        # 2. ቦቱ አድሚን መሆኑን አረጋግጥ
         member = await bot.get_chat_member(chat.id, bot.id)
+        
         if member.status not in ['administrator', 'creator']:
-            await message.answer("❌ እባክዎ ቦቱን በመጀመሪያ በቻናሉ ላይ 'Administrator' ያድርጉት።")
+            await message.answer("❌ ቦቱ በቻናሉ ውስጥ አድሚን አይደለም። እባክዎ ቦቱን በቻናሉ ላይ 'Administrator' ያድርጉት።")
             return
 
         await state.update_data(link=link)
@@ -66,7 +72,14 @@ async def check_link(message: Message, state: FSMContext, bot: Bot):
         await state.set_state(AdvertiseState.waiting_for_members)
         
     except Exception as e:
-        await message.answer("❌ ቻናሉን/ቦቱን ማግኘት አልቻልኩም። ቻናሉ Public መሆኑን እና ቦቱ አድሚን መሆኑን ያረጋግጡ።")
+        print(f"Error checking link: {e}")
+        await message.answer(
+            "❌ ቻናሉን/ቦቱን ማግኘት አልቻልኩም።\n\n"
+            "እባክዎ የሚከተሉትን ያረጋግጡ፦\n"
+            "1. ቻናሉ Public መሆኑን።\n"
+            "2. ቦቱ በቻናሉ ውስጥ አድሚን መሆኑን።\n"
+            "3. ሊንኩን @username መልክ መላክዎን።"
+        )
 
 @router.message(AdvertiseState.waiting_for_members)
 async def process_members(message: Message, state: FSMContext, bot: Bot):
@@ -103,7 +116,6 @@ async def process_members(message: Message, state: FSMContext, bot: Bot):
         await message.answer(f"✅ ማስታወቂያዎ ተጀምሯል!\n💰 {total_price} ብር ተቀንሷል።", reply_markup=get_main_kb())
     else:
         await message.answer("⚠️ በቂ ባላንስ የለዎትም። እባክዎ @Ariff_Support ያናግሩ።", reply_markup=get_main_kb())
-        
         admin_text = (
             f"🚨 አዲስ የማስታወቂያ ሙከራ (ባላንስ የለም)\n\n"
             f"👤 ተጠቃሚ: {message.from_user.full_name} (@{message.from_user.username})\n"
