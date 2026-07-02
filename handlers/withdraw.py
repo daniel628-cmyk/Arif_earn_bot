@@ -1,65 +1,109 @@
-from aiogram import Router, F
-from aiogram.types import Message
+from aiogram import Router, F, Bot
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from db import get_db
+from config import ADMIN_ID
 
-# የራስህን የቴሌግራም ID እዚህ አስገባ
-ADMIN_ID = 123456789 
 router = Router()
 
-class WithdrawForm(StatesGroup):
-    waiting_for_name = State()
+class WithdrawState(StatesGroup):
     waiting_for_phone = State()
-    waiting_for_amount = State()
+    waiting_for_name = State()
 
 @router.message(F.text == "💸 Withdraw")
 async def start_withdraw(message: Message, state: FSMContext):
     user_id = message.from_user.id
-    
-    # ባላንሱን ከዳታቤዝ እንፈትሽ
+
     conn = get_db()
     with conn.cursor() as cur:
-        cur.execute("SELECT amount FROM balances WHERE user_id = %s", (user_id,))
-        res = cur.fetchone()
-        amount = res[0] if res else 0
+        cur.execute("SELECT earned_balance FROM balances WHERE user_id = %s", (user_id,))
+        row = cur.fetchone()
+        earned = float(row[0]) if row else 0.0
     conn.close()
 
-    if amount < 50:
-        await message.answer(f"❌ ቢያንስ 50 ብር መውጣት ይችላሉ። የእርስዎ ባላንስ፡ {amount} ብር ነው።")
-    else:
-        await message.answer("✅ እባክዎን የቴሌብር ስምዎን (Full Name) ይላኩ።")
-        await state.set_state(WithdrawForm.waiting_for_name)
-
-@router.message(WithdrawForm.waiting_for_name)
-async def get_name(message: Message, state: FSMContext):
-    await state.update_data(name=message.text)
-    await message.answer("✅ የቴሌብር ስልክ ቁጥርዎን ይላኩ።")
-    await state.set_state(WithdrawForm.waiting_for_phone)
-
-@router.message(WithdrawForm.waiting_for_phone)
-async def get_phone(message: Message, state: FSMContext):
-    await state.update_data(phone=message.text)
-    await message.answer("✅ ማውጣት የሚፈልጉትን የገንዘብ መጠን ይላኩ።")
-    await state.set_state(WithdrawForm.waiting_for_amount)
-
-@router.message(WithdrawForm.waiting_for_amount)
-async def get_amount(message: Message, state: FSMContext, bot):
-    user_data = await state.get_data()
-    amount_str = message.text
-    
-    # ለአድሚን ጥያቄውን መላክ
-    try:
-        await bot.send_message(
-            ADMIN_ID, 
-            f"💸 **አዲስ የWithdraw ጥያቄ!**\n\n"
-            f"👤 ተጠቃሚ፡ @{message.from_user.username or 'N/A'}\n"
-            f"📛 ስም፡ {user_data['name']}\n"
-            f"📱 ስልክ፡ {user_data['phone']}\n"
-            f"💰 መጠን፡ {amount_str} ብር"
+    if earned < 25:
+        await message.answer(
+            "❌ Withdrawal Denied\n\n"
+            "• Minimum withdrawal: **25 Birr**\n"
+            "• You can only withdraw from **Earned Balance**"
         )
-        await message.answer("✅ ጥያቄዎ በተሳካ ሁኔታ ለአድሚን ተልኳል። በቅርቡ ክፍያ ይፈጸምልዎታል!")
-    except Exception as e:
-        await message.answer("❌ ጥያቄውን ለመላክ ችግር አጋጥሟል።")
-    
+        return
+
+    await state.update_data(earned=earned, amount=25.0)
+    await message.answer(
+        "🔄 Withdrawal Request\n\n"
+        "Please send your **Telebirr Phone Number** (10 digits, starts with 09 or 07):",
+        reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Cancel")]], resize_keyboard=True)
+    )
+    await state.set_state(WithdrawState.waiting_for_phone)
+
+
+@router.message(WithdrawState.waiting_for_phone)
+async def process_phone(message: Message, state: FSMContext):
+    if message.text == "❌ Cancel":
+        await state.clear()
+        return await message.answer("✅ Cancelled.", reply_markup=get_main_kb())
+
+    phone = message.text.strip()
+    if not (phone.isdigit() and len(phone) == 10 and phone.startswith(("09", "07"))):
+        return await message.answer("❌ Invalid number. Must be 10 digits starting with 09 or 07.")
+
+    await state.update_data(phone=phone)
+    await message.answer("✅ Now send your **Full Name** (as on Telebirr):")
+    await state.set_state(WithdrawState.waiting_for_name)
+
+
+@router.message(WithdrawState.waiting_for_name)
+async def process_name(message: Message, state: FSMContext, bot: Bot):
+    if message.text == "❌ Cancel":
+        await state.clear()
+        return await message.answer("✅ Cancelled.")
+
+    data = await state.get_data()
+    user_id = message.from_user.id
+    name = message.text.strip()
+    amount = data['amount']
+
+    # === INSTANT DEDUCTION ===
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE balances 
+            SET earned_balance = earned_balance - %s 
+            WHERE user_id = %s
+        """, (amount, user_id))
+        conn.commit()
+    conn.close()
+
+    # Send to Admin
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Approve", callback_data=f"wd_approve_{user_id}_{amount}"),
+            InlineKeyboardButton(text="❌ Reject & Refund", callback_data=f"wd_reject_{user_id}_{amount}")
+        ]
+    ])
+
+    await bot.send_message(
+        ADMIN_ID,
+        f"🚨 **New Withdrawal Request**\n\n"
+        f"👤 User: {message.from_user.full_name}\n"
+        f"📎 @{message.from_user.username or 'N/A'}\n"
+        f"🆔 {user_id}\n\n"
+        f"💰 Amount: {amount} Birr\n"
+        f"📱 Telebirr: {data['phone']}\n"
+        f"👨 Name: {name}\n\n"
+        f"✅ Amount has been deducted automatically.",
+        reply_markup=kb
+    )
+
+    await message.answer(
+        f"✅ Request Submitted Successfully!\n\n"
+        f"💰 {amount} Birr deducted from your Earned Balance.\n"
+        f"Status: **Pending Admin Approval**",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💬 Contact Admin", url=f"https://t.me/{ADMIN_USERNAME}")]  # Change ADMIN_USERNAME
+        ])
+    )
+
     await state.clear()
