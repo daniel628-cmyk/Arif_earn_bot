@@ -1,108 +1,231 @@
-import psycopg
 import os
+import psycopg
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
 
 def get_db():
-    """Create and return database connection"""
     return psycopg.connect(DATABASE_URL)
 
+
 def init_db():
-    """Initialize all required tables"""
     conn = get_db()
-    try:
-        with conn.cursor() as cur:
-            # === Balances Table ===
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS balances(
-                    user_id BIGINT PRIMARY KEY, 
-                    deposit_balance FLOAT DEFAULT 0,
-                    earned_balance FLOAT DEFAULT 0
-                );
-            """)
 
-            # === Ads / Campaigns Table ===
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS ads(
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT REFERENCES balances(user_id),
-                    link TEXT NOT NULL,
-                    type TEXT CHECK (type IN ('channel', 'bot')),
-                    target_count INT NOT NULL,
-                    current_count INT DEFAULT 0,
-                    price FLOAT NOT NULL,
-                    status TEXT DEFAULT 'active',
-                    is_active BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
+    with conn.cursor() as cur:
 
-            # === Completed Tasks ===
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS completed_ads(
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT,
-                    ad_id INT REFERENCES ads(id),
-                    completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(user_id, ad_id)
-                );
-            """)
+        # ================= USERS =================
 
-            # === Referrals Table (New) ===
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS referrals(
-                    id SERIAL PRIMARY KEY,
-                    referrer_id BIGINT,
-                    referred_id BIGINT UNIQUE,
-                    reward_given BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS users(
+            user_id BIGINT PRIMARY KEY,
+            username TEXT,
+            first_name TEXT,
+            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
 
-            # === Bots Table ===
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS bots(
-                    id SERIAL PRIMARY KEY,
-                    bot_name TEXT,
-                    bot_username TEXT UNIQUE,
-                    target_count INT DEFAULT 0,
-                    current_count INT DEFAULT 0,
-                    is_active BOOLEAN DEFAULT TRUE
-                );
-            """)
+        # ================= BALANCES =================
 
-            # === Channels Table ===
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS channels(
-                    id SERIAL PRIMARY KEY, 
-                    channel_id BIGINT UNIQUE, 
-                    channel_link TEXT, 
-                    channel_name TEXT, 
-                    is_active BOOLEAN DEFAULT TRUE, 
-                    limit_count INT DEFAULT 0, 
-                    current_count INT DEFAULT 0
-                );
-            """)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS balances(
+            user_id BIGINT PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
 
-        conn.commit()
-        print("✅ Database tables initialized successfully!")
-        
-    except Exception as e:
-        print(f"❌ Database initialization error: {e}")
-    finally:
-        conn.close()
+            deposit_balance DOUBLE PRECISION DEFAULT 0,
+
+            earned_balance DOUBLE PRECISION DEFAULT 0,
+
+            advertising_balance DOUBLE PRECISION DEFAULT 0
+        );
+        """)
+
+        # ================= CHANNELS =================
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS channels(
+
+            id SERIAL PRIMARY KEY,
+
+            channel_id BIGINT UNIQUE,
+
+            channel_username TEXT,
+
+            channel_name TEXT,
+
+            reward DOUBLE PRECISION DEFAULT 0.5,
+
+            target_count INTEGER,
+
+            current_count INTEGER DEFAULT 0,
+
+            is_active BOOLEAN DEFAULT TRUE,
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+        );
+        """)
+
+        # ================= BOTS =================
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS bots(
+
+            id SERIAL PRIMARY KEY,
+
+            bot_username TEXT UNIQUE,
+
+            bot_name TEXT,
+
+            reward DOUBLE PRECISION DEFAULT 0.5,
+
+            target_count INTEGER,
+
+            current_count INTEGER DEFAULT 0,
+
+            is_active BOOLEAN DEFAULT TRUE,
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+        );
+        """)
+
+        # ================= ADS =================
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS ads(
+
+            id SERIAL PRIMARY KEY,
+
+            user_id BIGINT REFERENCES users(user_id),
+
+            username TEXT,
+
+            ad_type TEXT,
+
+            target_count INTEGER,
+
+            current_count INTEGER DEFAULT 0,
+
+            reward DOUBLE PRECISION DEFAULT 0.5,
+
+            total_price DOUBLE PRECISION,
+
+            status TEXT DEFAULT 'pending',
+
+            is_active BOOLEAN DEFAULT FALSE,
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+        );
+        """)
+
+        # ================= COMPLETED TASKS =================
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS completed_tasks(
+
+            id SERIAL PRIMARY KEY,
+
+            user_id BIGINT,
+
+            task_type TEXT,
+
+            task_id INTEGER,
+
+            completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            UNIQUE(user_id,task_type,task_id)
+
+        );
+        """)
+
+        # ================= REFERRALS =================
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS referrals(
+
+            id SERIAL PRIMARY KEY,
+
+            referrer_id BIGINT,
+
+            referred_id BIGINT UNIQUE,
+
+            reward_given BOOLEAN DEFAULT FALSE,
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+        );
+        """)
+
+    conn.commit()
+
+    conn.close()
+
+    print("✅ Database Initialized")
 
 
-# Legacy function
-def update_and_check_limit(table_name, task_id):
+# ============================================
+# USER FUNCTIONS
+# ============================================
+
+def add_user(user_id, username, first_name):
+
     conn = get_db()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(f"UPDATE {table_name} SET current_count = current_count + 1 WHERE id = %s", (task_id,))
-            cur.execute(f"SELECT current_count, limit_count FROM {table_name} WHERE id = %s", (task_id,))
-            res = cur.fetchone()
-            if res and res[0] >= res[1]:
-                cur.execute(f"UPDATE {table_name} SET is_active = FALSE WHERE id = %s", (task_id,))
-        conn.commit()
-    finally:
-        conn.close()
+
+    with conn.cursor() as cur:
+
+        cur.execute("""
+
+        INSERT INTO users(user_id,username,first_name)
+
+        VALUES(%s,%s,%s)
+
+        ON CONFLICT(user_id)
+
+        DO NOTHING
+
+        """,(user_id,username,first_name))
+
+        cur.execute("""
+
+        INSERT INTO balances(user_id)
+
+        VALUES(%s)
+
+        ON CONFLICT(user_id)
+
+        DO NOTHING
+
+        """,(user_id,))
+
+    conn.commit()
+
+    conn.close()
+
+
+def get_balance(user_id):
+
+    conn=get_db()
+
+    with conn.cursor() as cur:
+
+        cur.execute("""
+
+        SELECT
+
+        deposit_balance,
+
+        earned_balance,
+
+        advertising_balance
+
+        FROM balances
+
+        WHERE user_id=%s
+
+        """,(user_id,))
+
+        data=cur.fetchone()
+
+    conn.close()
+
+    return data
