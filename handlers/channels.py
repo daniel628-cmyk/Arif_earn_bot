@@ -7,25 +7,17 @@ router = Router()
 @router.message(F.text == "📢 Join Channels")
 async def show_channels(message: Message):
     ads = AdsManager.get_active_ads(ad_type="channel")
-    
     if not ads:
-        return await message.answer("❌ No active channel campaigns at the moment.")
+        return await message.answer("❌ No active channel campaigns.")
 
     for ad in ads:
-        # ads_manager ውስጥ ባለው SELECT መሰረት id, link, target, current, price, type
         ad_id, link, target, current, price, ad_type = ad
-        remaining = target - current
-        
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📢 Join Channel", url=f"https://t.me/{link.replace('@', '')}")],
             [InlineKeyboardButton(text="✅ Verify", callback_data=f"vc_{ad_id}")]
         ])
-        
         await message.answer(
-            f"📢 Channel: {link}\n"
-            f"👥 Progress: {current}/{target} people\n"
-            f"⏳ Remaining: **{remaining}** spots\n"
-            f"💰 Reward: 0.30 Birr",
+            f"📢 Channel: {link}\n👥 Progress: {current}/{target}\n💰 Reward: {price} Birr",
             reply_markup=keyboard
         )
 
@@ -34,20 +26,13 @@ async def verify_channel_callback(callback: CallbackQuery, bot: Bot):
     ad_id = int(callback.data.split("_")[1])
     user_id = callback.from_user.id
 
-    # አስፈላጊው ማስተካከያ እዚህ አለ: await መጨመር
-    result = await AdsManager.update_ad_progress(ad_id, user_id)
+    # 'await' የሚለውን አስወግደነዋል ምክንያቱም ተግባሩ sync ነው
+    result = AdsManager.update_ad_progress(ad_id, user_id)
 
     if result["success"]:
         await callback.answer(result["message"], show_alert=True)
-        
-        # Update message if campaign is completed
         if result.get("completed"):
-            try:
-                await callback.message.edit_text(
-                    "🎉 This campaign has reached its target and is now closed."
-                )
-            except:
-                pass
+            try: await callback.message.edit_text("🎉 Campaign closed.")
+            except: pass
     else:
-        # ለተጠቃሚው ቀድሞ የሰራውን task ለመከላከል የሚሰጥ መልእክት
         await callback.answer(result["message"], show_alert=True)
