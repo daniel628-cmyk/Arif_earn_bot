@@ -229,3 +229,287 @@ def get_balance(user_id):
     conn.close()
 
     return data
+# ============================================
+# BALANCE FUNCTIONS
+# ============================================
+
+def add_deposit_balance(user_id, amount):
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE balances
+            SET deposit_balance = deposit_balance + %s
+            WHERE user_id = %s
+        """, (amount, user_id))
+    conn.commit()
+    conn.close()
+
+
+def deduct_deposit_balance(user_id, amount):
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE balances
+            SET deposit_balance = deposit_balance - %s
+            WHERE user_id = %s
+        """, (amount, user_id))
+    conn.commit()
+    conn.close()
+
+
+def add_earned_balance(user_id, amount):
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE balances
+            SET earned_balance = earned_balance + %s
+            WHERE user_id = %s
+        """, (amount, user_id))
+    conn.commit()
+    conn.close()
+
+
+def deduct_earned_balance(user_id, amount):
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE balances
+            SET earned_balance = earned_balance - %s
+            WHERE user_id = %s
+        """, (amount, user_id))
+    conn.commit()
+    conn.close()
+
+
+# ============================================
+# CHANNEL FUNCTIONS
+# ============================================
+
+def get_active_channels():
+    conn = get_db()
+
+    with conn.cursor() as cur:
+
+        cur.execute("""
+            SELECT
+            id,
+            channel_username,
+            channel_name,
+            reward,
+            target_count,
+            current_count
+
+            FROM channels
+
+            WHERE is_active=TRUE
+
+            ORDER BY id
+        """)
+
+        data = cur.fetchall()
+
+    conn.close()
+
+    return data
+
+
+def complete_channel(channel_id):
+
+    conn = get_db()
+
+    with conn.cursor() as cur:
+
+        cur.execute("""
+
+        UPDATE channels
+
+        SET current_count=current_count+1
+
+        WHERE id=%s
+
+        """,(channel_id,))
+
+        cur.execute("""
+
+        UPDATE channels
+
+        SET is_active=FALSE
+
+        WHERE id=%s
+
+        AND current_count>=target_count
+
+        """,(channel_id,))
+
+    conn.commit()
+
+    conn.close()
+
+
+# ============================================
+# BOT FUNCTIONS
+# ============================================
+
+def get_active_bots():
+
+    conn=get_db()
+
+    with conn.cursor() as cur:
+
+        cur.execute("""
+
+        SELECT
+
+        id,
+
+        bot_username,
+
+        bot_name,
+
+        reward,
+
+        target_count,
+
+        current_count
+
+        FROM bots
+
+        WHERE is_active=TRUE
+
+        ORDER BY id
+
+        """)
+
+        data=cur.fetchall()
+
+    conn.close()
+
+    return data
+
+
+def complete_bot(bot_id):
+
+    conn=get_db()
+
+    with conn.cursor() as cur:
+
+        cur.execute("""
+
+        UPDATE bots
+
+        SET current_count=current_count+1
+
+        WHERE id=%s
+
+        """,(bot_id,))
+
+        cur.execute("""
+
+        UPDATE bots
+
+        SET is_active=FALSE
+
+        WHERE id=%s
+
+        AND current_count>=target_count
+
+        """,(bot_id,))
+
+    conn.commit()
+
+    conn.close()
+
+
+# ============================================
+# COMPLETED TASKS
+# ============================================
+
+def task_completed(user_id, task_type, task_id):
+
+    conn=get_db()
+
+    with conn.cursor() as cur:
+
+        cur.execute("""
+
+        SELECT id
+
+        FROM completed_tasks
+
+        WHERE
+
+        user_id=%s
+
+        AND task_type=%s
+
+        AND task_id=%s
+
+        """,(user_id,task_type,task_id))
+
+        found=cur.fetchone()
+
+    conn.close()
+
+    return found is not None
+
+
+def save_completed_task(user_id, task_type, task_id):
+
+    conn=get_db()
+
+    with conn.cursor() as cur:
+
+        cur.execute("""
+
+        INSERT INTO completed_tasks
+
+        (user_id,task_type,task_id)
+
+        VALUES(%s,%s,%s)
+
+        ON CONFLICT DO NOTHING
+
+        """,(user_id,task_type,task_id))
+
+    conn.commit()
+
+    conn.close()
+
+
+# ============================================
+# ADVERTISEMENT
+# ============================================
+
+def create_ad(user_id, username, ad_type, target):
+
+    total = target * 0.5
+
+    conn=get_db()
+
+    with conn.cursor() as cur:
+
+        cur.execute("""
+
+        INSERT INTO ads
+
+        (
+
+        user_id,
+
+        username,
+
+        ad_type,
+
+        target_count,
+
+        total_price
+
+        )
+
+        VALUES(%s,%s,%s,%s,%s)
+
+        """,(user_id,username,ad_type,target,total))
+
+    conn.commit()
+
+    conn.close()
