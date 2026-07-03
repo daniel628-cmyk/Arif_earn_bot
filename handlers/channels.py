@@ -12,6 +12,7 @@ async def show_channels(message: Message):
         return await message.answer("❌ No active channel campaigns at the moment.")
 
     for ad in ads:
+        # ads_manager ውስጥ ባለው SELECT መሰረት id, link, target, current, price, type
         ad_id, link, target, current, price, ad_type = ad
         remaining = target - current
         
@@ -28,13 +29,13 @@ async def show_channels(message: Message):
             reply_markup=keyboard
         )
 
-
 @router.callback_query(F.data.startswith("vc_"))
 async def verify_channel_callback(callback: CallbackQuery, bot: Bot):
     ad_id = int(callback.data.split("_")[1])
     user_id = callback.from_user.id
 
-    result = AdsManager.update_ad_progress(ad_id, user_id)
+    # አስፈላጊው ማስተካከያ እዚህ አለ: await መጨመር
+    result = await AdsManager.update_ad_progress(ad_id, user_id)
 
     if result["success"]:
         await callback.answer(result["message"], show_alert=True)
@@ -48,4 +49,5 @@ async def verify_channel_callback(callback: CallbackQuery, bot: Bot):
             except:
                 pass
     else:
+        # ለተጠቃሚው ቀድሞ የሰራውን task ለመከላከል የሚሰጥ መልእክት
         await callback.answer(result["message"], show_alert=True)
