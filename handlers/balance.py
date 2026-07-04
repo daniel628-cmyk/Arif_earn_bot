@@ -8,24 +8,22 @@ router = Router()
 async def check_balance(message: Message):
     user_id = message.from_user.id
     conn = get_db()
-    try:
-        with conn.cursor() as cur:
-            # ከ amount አምድ ላይ እናንብብ
-            cur.execute("SELECT deposit_balance, amount FROM balances WHERE user_id = %s", (user_id,))
-            row = cur.fetchone()
-            
-            if not row:
-                deposit, earned = 0.0, 0.0
-            else:
-                deposit = row[0]
-                earned = row[1] # እዚህ amount ነው ያለው
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT deposit_balance, earned_balance 
+            FROM balances WHERE user_id = %s
+        """, (user_id,))
+        row = cur.fetchone()
+    conn.close()
 
-            total = deposit + earned
-            await message.answer(
-                f"💰 **የእርስዎ ባላንስ**\n\n"
-                f"📥 ተቀማጭ: **{deposit:.2f}** ብር\n"
-                f"💵 የተገኘ (Earned): **{earned:.2f}** ብር\n\n"
-                f"🔢 **ጠቅላላ: {total:.2f}** ብር"
-            )
-    finally:
-        conn.close()
+    if not row:
+        deposit = earned = 0.0
+    else:
+        deposit, earned = row
+
+    await message.answer(
+        f"💰 **Your Balance**\n\n"
+        f"📥 Deposit: **{deposit:.2f}** Birr\n"
+        f"💵 Earned: **{earned:.2f}** Birr\n"
+        f"🔢 Total: **{deposit + earned:.2f}** Birr"
+    )
