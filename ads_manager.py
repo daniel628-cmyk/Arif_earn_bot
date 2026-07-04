@@ -1,92 +1,221 @@
-import psycopg
 from db import get_db
 
+REWARD_PER_USER = 0.5
+
+
 class AdsManager:
-    """Central brain for managing advertisements/campaigns"""
-    
+
     @staticmethod
-    def get_active_ads(ad_type: str = None):
+    def get_active_ads(ad_type=None):
         conn = get_db()
         try:
             with conn.cursor() as cur:
-                query = """
-                    SELECT id, link, target_count, current_count, price, type 
-                    FROM ads 
-                    WHERE is_active = TRUE AND status = 'active'
-                """
+
                 if ad_type:
-                    query += " AND type = %s"
-                    cur.execute(query, (ad_type,))
+                    cur.execute("""
+                        SELECT id,user_id,link,target_count,current_count,type
+                        FROM ads
+                        WHERE is_active=TRUE
+                        AND status='active'
+                        AND type=%s
+                        ORDER BY id ASC
+                    """,(ad_type,))
                 else:
-                    cur.execute(query)
+                    cur.execute("""
+                        SELECT id,user_id,link,target_count,current_count,type
+                        FROM ads
+                        WHERE is_active=TRUE
+                        AND status='active'
+                        ORDER BY id ASC
+                    """)
+
                 return cur.fetchall()
+
         finally:
             conn.close()
 
     @staticmethod
-    def update_ad_progress(ad_id: int, user_id: int):
+    def create_ad(user_id,link,target_count,ad_type):
+
+        total_price = target_count * REWARD_PER_USER
+
         conn = get_db()
+
         try:
+
             with conn.cursor() as cur:
-                # 1. ቼክ ማድረግ (ተጠቃሚው ቀድሞ ሰርቷል?)
-                cur.execute("SELECT 1 FROM completed_ads WHERE user_id = %s AND ad_id = %s", (user_id, ad_id))
-                if cur.fetchone():
-                    return {"success": False, "message": "✅ ቀድመው ሰርተውታል!"}
 
-                # 2. እድገት ማዘመን (current_count መጨመር)
                 cur.execute("""
-                    UPDATE ads SET current_count = current_count + 1 
-                    WHERE id = %s AND is_active = TRUE
-                    RETURNING current_count, target_count, price
-                """, (ad_id,))
-                
-                result = cur.fetchone()
-                if not result:
-                    return {"success": False, "message": "❌ ይህ ማስታወቂያ ተዘግቷል።"}
+                    SELECT deposit_balance
+                    FROM balances
+                    WHERE user_id=%s
+                """,(user_id,))
 
-                current, target, price = result
-                
-                # 3. ሽልማቱን ወደ 'amount' አምድ ማከል
+                balance = cur.fetchone()
+
+                if not balance:
+                    return {
+                        "success":False,
+                        "message":"Balance not found."
+                    }
+
+                if balance[0] < total_price:
+                    return {
+                        "success":False,
+                        "message":"❌ Deposit Balance በቂ አይደለም።"
+                    }
+
                 cur.execute("""
-                    INSERT INTO balances (user_id, amount) 
-                    VALUES (%s, %s)
-                    ON CONFLICT (user_id) 
-                    DO UPDATE SET amount = balances.amount + EXCLUDED.amount
-                """, (user_id, price))
+                    UPDATE balances
+                    SET deposit_balance=deposit_balance-%s
+                    WHERE user_id=%s
+                """,(total_price,user_id))
 
-                # 4. 'completed_ads' ውስጥ መመዝገብ
-                cur.execute("INSERT INTO completed_ads (user_id, ad_id) VALUES (%s, %s)", (user_id, ad_id))
-
-                # 5. target ከደረሰ ማስታወቂያውን መዝጋት
-                if current + 1 >= target:
-                    cur.execute("UPDATE ads SET is_active = FALSE, status = 'completed' WHERE id = %s", (ad_id,))
-
-                conn.commit()
-                return {"success": True, "message": f"✅ እንኳን ደስ አለዎት! {price} ብር ተጨምሮልዎታል።"}
-                
-        except Exception as e:
-            conn.rollback()
-            print(f"Error in update_ad_progress: {e}")
-            return {"success": False, "message": "❌ ስህተት ተፈጥሯል።"}
-        finally:
-            conn.close()
-
-    @staticmethod
-    def create_ad(user_id: int, link: str, target_count: int, ad_type: str, price: float):
-        conn = get_db()
-        try:
-            with conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO ads (user_id, link, target_count, current_count, price, type, status, is_active)
-                    VALUES (%s, %s, %s, 0, %s, %s, 'active', TRUE)
+                    INSERT INTO ads
+                    (
+                        user_id,
+                        link,
+                        target_count,
+                        current_count,
+                        price,
+                        type,
+                        status,
+                        is_active
+                    )
+                    VALUES
+                    (
+                        %s,
+                        %s,
+                        %s,
+                        0,
+                        %s,
+                        %s,
+                        'active',
+                        TRUE
+                    )
                     RETURNING id
-                """, (user_id, link, target_count, price, ad_type))
+                """,(user_id,link,target_count,total_price,ad_type))
+
                 ad_id = cur.fetchone()[0]
+
                 conn.commit()
-                return {"success": True, "ad_id": ad_id}
+
+                return {
+                    "success":True,
+                    "ad_id":ad_id,
+                    "total_price":total_price
+                }
+
         except Exception as e:
+
             conn.rollback()
-            print(f"Error creating ad: {e}")
-            return {"success": False, "message": str(e)}
+
+            return {
+                "success":False,
+                "message":str(e)
+            }
+
         finally:
+
+            conn.close()
+
+    @staticmethod
+    def update_ad_progress(ad_id,user_id):
+
+        conn=get_db()
+
+        try:
+
+            with conn.cursor() as cur:
+
+                cur.execute("""
+                    SELECT user_id,current_count,target_count
+                    FROM ads
+                    WHERE id=%s
+                    AND is_active=TRUE
+                """,(ad_id,))
+
+                ad = cur.fetchone()
+
+                if not ad:
+                    return {
+                        "success":False,
+                        "message":"Campaign Closed."
+                    }
+
+                owner=current=target=None
+
+                owner=ad[0]
+                current=ad[1]
+                target=ad[2]
+
+                if owner==user_id:
+                    return {
+                        "success":False,
+                        "message":"ራስዎን ማስታወቂያ መስራት አይችሉም።"
+                    }
+
+                cur.execute("""
+                    SELECT 1
+                    FROM completed_ads
+                    WHERE user_id=%s
+                    AND ad_id=%s
+                """,(user_id,ad_id))
+
+                if cur.fetchone():
+
+                    return {
+                        "success":False,
+                        "message":"Already Completed."
+                    }
+
+                cur.execute("""
+                    INSERT INTO completed_ads(user_id,ad_id)
+                    VALUES(%s,%s)
+                """,(user_id,ad_id))
+
+                cur.execute("""
+                    UPDATE balances
+                    SET earned_balance=earned_balance+%s
+                    WHERE user_id=%s
+                """,(REWARD_PER_USER,user_id))
+
+                cur.execute("""
+                    UPDATE ads
+                    SET current_count=current_count+1
+                    WHERE id=%s
+                    RETURNING current_count
+                """,(ad_id,))
+
+                new_current = cur.fetchone()[0]
+
+                if new_current >= target:
+
+                    cur.execute("""
+                        UPDATE ads
+                        SET
+                        is_active=FALSE,
+                        status='completed'
+                        WHERE id=%s
+                    """,(ad_id,))
+
+                conn.commit()
+
+                return {
+                    "success":True,
+                    "message":f"✅ {REWARD_PER_USER} Birr Added."
+                }
+
+        except Exception as e:
+
+            conn.rollback()
+
+            return {
+                "success":False,
+                "message":str(e)
+            }
+
+        finally:
+
             conn.close()
