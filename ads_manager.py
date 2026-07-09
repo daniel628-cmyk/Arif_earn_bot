@@ -1,314 +1,374 @@
-from db import (
-    create_ad,
-    get_active_ads,
-    get_user_ads,
-    get_ad,
-    delete_ad,
-    increase_progress,
-    complete_ad,
-    has_completed,
-    add_earned,
-    create_verification_code,
-    verify_code,
-    close_ad,
+from aiogram import Router, F
+from aiogram.types import (
+    Message,
+    CallbackQuery,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
 )
+from aiogram.fsm.state import StatesGroup, State
+from aiogram.fsm.context import FSMContext
+
+from ads_manager import AdsManager
+from db import get_balance
+
+router = Router()
 
 
-class AdsManager:
+# ==========================
+# STATES
+# ==========================
 
-    REWARD = 0.5
-    MIN_TARGET = 10
+class AdvertiseState(StatesGroup):
+    waiting_type = State()
+    waiting_link = State()
+    waiting_target = State()
 
-    @staticmethod
-    def create_campaign(
-        user_id: int,
-        link: str,
-        ad_type: str,
-        target: int
-    ):
 
-        if ad_type not in ("channel", "bot"):
-            return {
-                "success": False,
-                "message": "Invalid advertisement type."
-            }
+# ==========================
+# ADVERTISE MENU
+# ==========================
 
-        if target < AdsManager.MIN_TARGET:
-            return {
-                "success": False,
-                "message": f"Minimum target is {AdsManager.MIN_TARGET}."
-            }
+@router.message(F.text == "📢 Advertise")
+async def advertise_menu(message: Message):
 
-        return create_ad(
-            user_id=user_id,
-            link=link,
-            ad_type=ad_type,
-            target_count=target
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📢 Channel Advertisement",
+                    callback_data="ad_channel"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🤖 Bot Advertisement",
+                    callback_data="ad_bot"
+                )
+            ]
+        ]
+    )
+
+    balance = get_balance(message.from_user.id)
+
+    text = (
+        "📢 <b>Create Advertisement</b>\n\n"
+        f"💳 Deposit Balance: <b>{balance['deposit']:.2f} Birr</b>\n\n"
+        "💰 Reward Per User: <b>0.5 Birr</b>\n"
+        "👥 Minimum Target: <b>10 Users</b>\n\n"
+        "Select advertisement type."
+    )
+
+    await message.answer(
+        text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+
+# ==========================
+# SELECT TYPE
+# ==========================
+
+@router.callback_query(F.data == "ad_channel")
+async def channel_selected(
+    callback: CallbackQuery,
+    state: FSMContext
+):
+
+    await state.update_data(
+        ad_type="channel"
+    )
+
+    await state.set_state(
+        AdvertiseState.waiting_link
+    )
+
+    await callback.message.answer(
+        "📢 Send your channel username.\n\nExample:\n@MyChannel"
+    )
+
+    await callback.answer()
+
+
+@router.callback_query(F.data == "ad_bot")
+async def bot_selected(
+    callback: CallbackQuery,
+    state: FSMContext
+):
+
+    await state.update_data(
+        ad_type="bot"
+    )
+
+    await state.set_state(
+        AdvertiseState.waiting_link
+    )
+
+    await callback.message.answer(
+        "🤖 Send your bot username.\n\nExample:\n@MyAwesomeBot"
+    )
+
+    await callback.answer()
+from config import ADMIN_USERNAME
+
+
+# ==========================
+# RECEIVE LINK
+# ==========================
+
+@router.message(AdvertiseState.waiting_link)
+async def receive_link(
+    message: Message,
+    state: FSMContext
+):
+
+    link = message.text.strip()
+
+    if not link.startswith("@"):
+        return await message.answer(
+            "❌ Invalid username.\n\nExample:\n@MyChannel"
         )
 
-    @staticmethod
-    def active_channels():
+    await state.update_data(link=link)
 
-        return get_active_ads("channel")
+    await state.set_state(
+        AdvertiseState.waiting_target
+    )
 
-    @staticmethod
-    def active_bots():
-
-        return get_active_ads("bot")
-
-    @staticmethod
-    def my_ads(user_id):
-
-        return get_user_ads(user_id)
-
-    @staticmethod
-    def get_campaign(ad_id):
-
-        return get_ad(ad_id)
-
-    @staticmethod
-    def remove_campaign(ad_id):
-
-        delete_ad(ad_id)
-
-    @staticmethod
-    def complete_campaign(user_id: int, ad_id: int):
-
-        # Already completed?
-        if has_completed(user_id, ad_id):
-            return {
-                "success": False,
-                "message": "You have already completed this task."
-            }
-
-        campaign = get_ad(ad_id)
-
-        if campaign is None:
-            return {
-                "success": False,
-                "message": "Campaign not found."
-            }
-
-        if not campaign[9]:
-            return {
-                "success": False,
-                "message": "Campaign is no longer active."
-            }
-
-        reward = campaign[6]
-
-        # Save completed task
-        complete_ad(user_id, ad_id)
-
-        # Pay reward
-        add_earned(user_id, reward)
-
-        # Increase campaign progress
-        increase_progress(ad_id)
-
-        return {
-            "success": True,
-            "reward": reward,
-            "message": f"{reward} Birr has been added to your balance."
-        }
+    await message.answer(
+        "👥 Send target users.\n\n"
+        "Minimum: 10"
+    )
 
 
-    @staticmethod
-    def verify_task(user_id: int, code: str):
+# ==========================
+# RECEIVE TARGET
+# ==========================
 
-        data = verify_code(code)
+@router.message(AdvertiseState.waiting_target)
+async def receive_target(
+    message: Message,
+    state: FSMContext
+):
 
-        if data is None:
-            return {
-                "success": False,
-                "message": "Invalid or expired verification code."
-            }
+    if not message.text.isdigit():
+        return await message.answer(
+            "❌ Target must be a number."
+        )
 
-        if data["user_id"] != user_id:
-            return {
-                "success": False,
-                "message": "This verification code does not belong to you."
-            }
+    target = int(message.text)
 
-        return AdsManager.complete_campaign(
-            user_id=user_id,
-            ad_id=data["ad_id"]
+    if target < 10:
+        return await message.answer(
+            "❌ Minimum target is 10 users."
+        )
+
+    data = await state.get_data()
+
+    ad_type = data["ad_type"]
+    link = data["link"]
+
+    total_price = target * 0.5
+
+    balance = get_balance(
+        message.from_user.id
+    )
+
+    if balance["deposit"] < total_price:
+
+        await state.clear()
+
+        return await message.answer(
+
+            f"❌ Your deposit balance is insufficient.\n\n"
+
+            f"💰 Required: {total_price:.2f} Birr\n"
+
+            f"💳 Your Balance: {balance['deposit']:.2f} Birr\n\n"
+
+            f"Please deposit using:\n"
+
+            f"@{ADMIN_USERNAME}"
+
+        )
+
+    result = AdsManager.create_campaign(
+
+        user_id=message.from_user.id,
+
+        link=link,
+
+        ad_type=ad_type,
+
+        target=target
+
+    )
+
+    await state.clear()
+
+    if not result["success"]:
+
+        return await message.answer(
+            result["message"]
+        )
+
+    await message.answer(
+
+        "✅ Advertisement created successfully!\n\n"
+
+        f"🆔 Campaign ID: {result['ad_id']}\n"
+
+        f"🔗 Link: {link}\n"
+
+        f"👥 Target: {target}\n"
+
+        f"💰 Cost: {result['total_price']:.2f} Birr\n"
+
+        "📢 Your campaign is now active."
+
+    )
+# ==========================
+# MY ADVERTISEMENTS
+# ==========================
+
+@router.message(F.text == "📋 My Advertisements")
+async def my_advertisements(message: Message):
+
+    ads = AdsManager.my_ads(message.from_user.id)
+
+    if not ads:
+        return await message.answer(
+            "📭 You don't have any advertisements."
+        )
+
+    for ad in ads:
+
+        ad_id = ad[0]
+        link = ad[1]
+        ad_type = ad[2]
+        target = ad[3]
+        current = ad[4]
+        status = ad[5]
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="📊 Progress",
+                        callback_data=f"progress_{ad_id}"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="❌ Delete",
+                        callback_data=f"delete_{ad_id}"
+                    ),
+                    InlineKeyboardButton(
+                        text="🔒 Close",
+                        callback_data=f"close_{ad_id}"
+                    )
+                ]
+            ]
+        )
+
+        await message.answer(
+
+            f"🆔 ID : {ad_id}\n"
+            f"📢 Type : {ad_type.title()}\n"
+            f"🔗 {link}\n"
+            f"👥 {current}/{target}\n"
+            f"📌 Status : {status.title()}",
+
+            reply_markup=keyboard
+
         )
 
 
-    @staticmethod
-    def finish_campaign(ad_id: int):
+# ==========================
+# PROGRESS
+# ==========================
 
-        close_ad(ad_id)
+@router.callback_query(F.data.startswith("progress_"))
+async def progress_callback(callback: CallbackQuery):
 
-        return {
-            "success": True,
-            "message": "Campaign completed successfully."
-        }
+    ad_id = int(callback.data.split("_")[1])
 
+    info = AdsManager.campaign_info(ad_id)
 
-    @staticmethod
-    def campaign_progress(ad_id: int):
-
-        campaign = get_ad(ad_id)
-
-        if campaign is None:
-            return None
-
-        return {
-            "current": campaign[5],
-            "target": campaign[4],
-            "remaining": campaign[4] - campaign[5],
-            "status": campaign[8]
-        }
-
-
-    @staticmethod
-    def reward_per_user():
-
-        return AdsManager.REWARD
-
-
-    @staticmethod
-    def minimum_target():
-
-        return AdsManager.MIN_TARGET
-
-        return {
-            "success": True
-        }
-
-    @staticmethod
-    def generate_code(
-        user_id,
-        ad_id
-    ):
-
-        return create_verification_code(
-            user_id,
-            ad_id
+    if info is None:
+        return await callback.answer(
+            "Advertisement not found.",
+            show_alert=True
         )
 
-    @staticmethod
-    def verify(code):
+    remain = info["target"] - info["current"]
 
-        return verify_code(code)
-    @staticmethod
-    def get_statistics():
+    await callback.message.answer(
 
-        channels = len(get_active_ads("channel"))
-        bots = len(get_active_ads("bot"))
+        "📊 Advertisement Progress\n\n"
 
-        return {
-            "active_channels": channels,
-            "active_bots": bots,
-            "total_active": channels + bots
-        }
+        f"🆔 ID : {info['id']}\n"
 
+        f"📢 Type : {info['type'].title()}\n"
 
-    @staticmethod
-    def my_statistics(user_id: int):
+        f"🔗 {info['link']}\n\n"
 
-        campaigns = get_user_ads(user_id)
+        f"👥 Progress : {info['current']}/{info['target']}\n"
 
-        total = len(campaigns)
-        active = 0
-        completed = 0
-        closed = 0
+        f"⌛ Remaining : {remain}\n"
 
-        for campaign in campaigns:
+        f"📌 Status : {info['status'].title()}"
 
-            status = campaign[5]
+    )
 
-            if status == "active":
-                active += 1
-
-            elif status == "completed":
-                completed += 1
-
-            elif status == "closed":
-                closed += 1
-
-        return {
-            "total": total,
-            "active": active,
-            "completed": completed,
-            "closed": closed
-        }
+    await callback.answer()
 
 
-    @staticmethod
-    def campaign_info(ad_id: int):
+# ==========================
+# DELETE ADVERTISEMENT
+# ==========================
 
-        campaign = get_ad(ad_id)
+@router.callback_query(F.data.startswith("delete_"))
+async def delete_callback(callback: CallbackQuery):
 
-        if campaign is None:
-            return None
+    ad_id = int(callback.data.split("_")[1])
 
-        return {
-            "id": campaign[0],
-            "owner": campaign[1],
-            "link": campaign[2],
-            "type": campaign[3],
-            "target": campaign[4],
-            "current": campaign[5],
-            "reward": campaign[6],
-            "total_price": campaign[7],
-            "status": campaign[8],
-            "is_active": campaign[9],
-            "created_at": campaign[10],
-            "completed_at": campaign[11]
-        }
+    result = AdsManager.delete_campaign(ad_id)
 
+    if result["success"]:
 
-    @staticmethod
-    def active_campaigns():
+        await callback.message.edit_text(
+            "🗑 Advertisement deleted successfully."
+        )
 
-        channels = get_active_ads("channel")
-        bots = get_active_ads("bot")
+    else:
 
-        return channels + bots
+        await callback.answer(
+            result["message"],
+            show_alert=True
+        )
 
 
-    @staticmethod
-    def delete_campaign(ad_id: int):
+# ==========================
+# CLOSE ADVERTISEMENT
+# ==========================
 
-        campaign = get_ad(ad_id)
+@router.callback_query(F.data.startswith("close_"))
+async def close_callback(callback: CallbackQuery):
 
-        if campaign is None:
-            return {
-                "success": False,
-                "message": "Campaign not found."
-            }
+    ad_id = int(callback.data.split("_")[1])
 
-        delete_ad(ad_id)
+    result = AdsManager.admin_close(ad_id)
 
-        return {
-            "success": True,
-            "message": "Campaign deleted successfully."
-        }
+    if result["success"]:
 
+        await callback.message.edit_text(
+            "🔒 Advertisement closed successfully."
+        )
 
-    @staticmethod
-    def admin_close(ad_id: int):
+    else:
 
-        campaign = get_ad(ad_id)
-
-        if campaign is None:
-            return {
-                "success": False,
-                "message": "Campaign not found."
-            }
-
-        close_ad(ad_id)
-
-        return {
-            "success": True,
-            "message": "Campaign closed successfully."
-        }
-
-
-    @staticmethod
-    def campaign_exists(ad_id: int):
-
-        return get_ad(ad_id) is not None
+        await callback.answer(
+            result["message"],
+            show_alert=True
+        )
