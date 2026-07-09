@@ -1,113 +1,314 @@
-from db import get_db
+from db import (
+    create_ad,
+    get_active_ads,
+    get_user_ads,
+    get_ad,
+    delete_ad,
+    increase_progress,
+    complete_ad,
+    has_completed,
+    add_earned,
+    create_verification_code,
+    verify_code,
+    close_ad,
+)
 
-REWARD_PER_USER = 0.5
 
 class AdsManager:
 
-    @staticmethod
-    def get_active_ads(ad_type=None):
-        """Get active ads for users to join"""
-        conn = get_db()
-        try:
-            with conn.cursor() as cur:
-                query = """
-                    SELECT id, user_id, link, target_count, current_count, type
-                    FROM ads
-                    WHERE is_active = TRUE AND status = 'active'
-                """
-                if ad_type:
-                    query += " AND type = %s"
-                    cur.execute(query, (ad_type,))
-                else:
-                    cur.execute(query)
-                return cur.fetchall()
-        finally:
-            conn.close()
+    REWARD = 0.5
+    MIN_TARGET = 10
 
     @staticmethod
-    def create_ad(user_id: int, link: str, target_count: int, ad_type: str):
-        """Create new ad campaign"""
-        total_price = target_count * REWARD_PER_USER
+    def create_campaign(
+        user_id: int,
+        link: str,
+        ad_type: str,
+        target: int
+    ):
 
-        conn = get_db()
-        try:
-            with conn.cursor() as cur:
-                # Check deposit balance
-                cur.execute("SELECT deposit_balance FROM balances WHERE user_id = %s", (user_id,))
-                row = cur.fetchone()
-                if not row or row[0] < total_price:
-                    return {"success": False, "message": "❌ Not enough deposit balance."}
+        if ad_type not in ("channel", "bot"):
+            return {
+                "success": False,
+                "message": "Invalid advertisement type."
+            }
 
-                # Deduct deposit
-                cur.execute("""
-                    UPDATE balances SET deposit_balance = deposit_balance - %s WHERE user_id = %s
-                """, (total_price, user_id))
+        if target < AdsManager.MIN_TARGET:
+            return {
+                "success": False,
+                "message": f"Minimum target is {AdsManager.MIN_TARGET}."
+            }
 
-                # Create ad
-                cur.execute("""
-                    INSERT INTO ads (user_id, link, target_count, price, type, status, is_active)
-                    VALUES (%s, %s, %s, %s, %s, 'active', TRUE)
-                    RETURNING id
-                """, (user_id, link, target_count, REWARD_PER_USER, ad_type))
-
-                ad_id = cur.fetchone()[0]
-                conn.commit()
-
-                return {"success": True, "ad_id": ad_id, "price": total_price}
-        except Exception as e:
-            conn.rollback()
-            return {"success": False, "message": str(e)}
-        finally:
-            conn.close()
+        return create_ad(
+            user_id=user_id,
+            link=link,
+            ad_type=ad_type,
+            target_count=target
+        )
 
     @staticmethod
-    def update_ad_progress(ad_id: int, user_id: int):
-        """Verify task and reward user"""
-        conn = get_db()
-        try:
-            with conn.cursor() as cur:
-                # Get ad
-                cur.execute("""
-                    SELECT user_id as owner_id, current_count, target_count 
-                    FROM ads WHERE id = %s AND is_active = TRUE
-                """, (ad_id,))
-                ad = cur.fetchone()
-                if not ad:
-                    return {"success": False, "message": "❌ Campaign is closed."}
+    def active_channels():
 
-                owner_id, current, target = ad
-                if owner_id == user_id:
-                    return {"success": False, "message": "❌ You cannot complete your own ad."}
+        return get_active_ads("channel")
 
-                # Check if already completed
-                cur.execute("SELECT 1 FROM completed_ads WHERE user_id = %s AND ad_id = %s", (user_id, ad_id))
-                if cur.fetchone():
-                    return {"success": False, "message": "✅ You already completed this task."}
+    @staticmethod
+    def active_bots():
 
-                # Mark completed
-                cur.execute("INSERT INTO completed_ads (user_id, ad_id) VALUES (%s, %s)", (user_id, ad_id))
+        return get_active_ads("bot")
 
-                # Give reward
-                cur.execute("UPDATE balances SET earned_balance = earned_balance + %s WHERE user_id = %s", 
-                           (REWARD_PER_USER, user_id))
+    @staticmethod
+    def my_ads(user_id):
 
-                # Update progress
-                cur.execute("UPDATE ads SET current_count = current_count + 1 WHERE id = %s RETURNING current_count", (ad_id,))
-                new_current = cur.fetchone()[0]
+        return get_user_ads(user_id)
 
-                completed = new_current >= target
-                if completed:
-                    cur.execute("UPDATE ads SET is_active = FALSE, status = 'completed' WHERE id = %s", (ad_id,))
+    @staticmethod
+    def get_campaign(ad_id):
 
-                conn.commit()
+        return get_ad(ad_id)
 
-                return {
-                    "success": True,
-                    "completed": completed,
-                    "message": f"🎉 +{REWARD_PER_USER} Birr added to your Earned Balance!"
-                }
-        except Exception as e:
-            conn.rollback()
-            return {"success": False, "message": "❌ Error occurred."}
-        finally:
-            conn.close()
+    @staticmethod
+    def remove_campaign(ad_id):
+
+        delete_ad(ad_id)
+
+    @staticmethod
+    def complete_campaign(user_id: int, ad_id: int):
+
+        # Already completed?
+        if has_completed(user_id, ad_id):
+            return {
+                "success": False,
+                "message": "You have already completed this task."
+            }
+
+        campaign = get_ad(ad_id)
+
+        if campaign is None:
+            return {
+                "success": False,
+                "message": "Campaign not found."
+            }
+
+        if not campaign[9]:
+            return {
+                "success": False,
+                "message": "Campaign is no longer active."
+            }
+
+        reward = campaign[6]
+
+        # Save completed task
+        complete_ad(user_id, ad_id)
+
+        # Pay reward
+        add_earned(user_id, reward)
+
+        # Increase campaign progress
+        increase_progress(ad_id)
+
+        return {
+            "success": True,
+            "reward": reward,
+            "message": f"{reward} Birr has been added to your balance."
+        }
+
+
+    @staticmethod
+    def verify_task(user_id: int, code: str):
+
+        data = verify_code(code)
+
+        if data is None:
+            return {
+                "success": False,
+                "message": "Invalid or expired verification code."
+            }
+
+        if data["user_id"] != user_id:
+            return {
+                "success": False,
+                "message": "This verification code does not belong to you."
+            }
+
+        return AdsManager.complete_campaign(
+            user_id=user_id,
+            ad_id=data["ad_id"]
+        )
+
+
+    @staticmethod
+    def finish_campaign(ad_id: int):
+
+        close_ad(ad_id)
+
+        return {
+            "success": True,
+            "message": "Campaign completed successfully."
+        }
+
+
+    @staticmethod
+    def campaign_progress(ad_id: int):
+
+        campaign = get_ad(ad_id)
+
+        if campaign is None:
+            return None
+
+        return {
+            "current": campaign[5],
+            "target": campaign[4],
+            "remaining": campaign[4] - campaign[5],
+            "status": campaign[8]
+        }
+
+
+    @staticmethod
+    def reward_per_user():
+
+        return AdsManager.REWARD
+
+
+    @staticmethod
+    def minimum_target():
+
+        return AdsManager.MIN_TARGET
+
+        return {
+            "success": True
+        }
+
+    @staticmethod
+    def generate_code(
+        user_id,
+        ad_id
+    ):
+
+        return create_verification_code(
+            user_id,
+            ad_id
+        )
+
+    @staticmethod
+    def verify(code):
+
+        return verify_code(code)
+    @staticmethod
+    def get_statistics():
+
+        channels = len(get_active_ads("channel"))
+        bots = len(get_active_ads("bot"))
+
+        return {
+            "active_channels": channels,
+            "active_bots": bots,
+            "total_active": channels + bots
+        }
+
+
+    @staticmethod
+    def my_statistics(user_id: int):
+
+        campaigns = get_user_ads(user_id)
+
+        total = len(campaigns)
+        active = 0
+        completed = 0
+        closed = 0
+
+        for campaign in campaigns:
+
+            status = campaign[5]
+
+            if status == "active":
+                active += 1
+
+            elif status == "completed":
+                completed += 1
+
+            elif status == "closed":
+                closed += 1
+
+        return {
+            "total": total,
+            "active": active,
+            "completed": completed,
+            "closed": closed
+        }
+
+
+    @staticmethod
+    def campaign_info(ad_id: int):
+
+        campaign = get_ad(ad_id)
+
+        if campaign is None:
+            return None
+
+        return {
+            "id": campaign[0],
+            "owner": campaign[1],
+            "link": campaign[2],
+            "type": campaign[3],
+            "target": campaign[4],
+            "current": campaign[5],
+            "reward": campaign[6],
+            "total_price": campaign[7],
+            "status": campaign[8],
+            "is_active": campaign[9],
+            "created_at": campaign[10],
+            "completed_at": campaign[11]
+        }
+
+
+    @staticmethod
+    def active_campaigns():
+
+        channels = get_active_ads("channel")
+        bots = get_active_ads("bot")
+
+        return channels + bots
+
+
+    @staticmethod
+    def delete_campaign(ad_id: int):
+
+        campaign = get_ad(ad_id)
+
+        if campaign is None:
+            return {
+                "success": False,
+                "message": "Campaign not found."
+            }
+
+        delete_ad(ad_id)
+
+        return {
+            "success": True,
+            "message": "Campaign deleted successfully."
+        }
+
+
+    @staticmethod
+    def admin_close(ad_id: int):
+
+        campaign = get_ad(ad_id)
+
+        if campaign is None:
+            return {
+                "success": False,
+                "message": "Campaign not found."
+            }
+
+        close_ad(ad_id)
+
+        return {
+            "success": True,
+            "message": "Campaign closed successfully."
+        }
+
+
+    @staticmethod
+    def campaign_exists(ad_id: int):
+
+        return get_ad(ad_id) is not None
