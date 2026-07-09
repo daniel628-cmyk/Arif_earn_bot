@@ -251,3 +251,178 @@ async def refresh_channels(message: Message):
         )
 
     await join_channels(message)
+from aiogram import Router, F
+from aiogram.types import (
+    Message,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+)
+
+from ads_manager import AdsManager
+
+router = Router()
+
+VERIFY_BOT = "YourVerifyBot"   # @YourVerifyBot
+
+
+@router.message(F.text == "📢 Join Channels")
+async def join_channels(message: Message):
+
+    ads = AdsManager.active_channels()
+
+    if not ads:
+        return await message.answer(
+            "📭 No active channel advertisements."
+        )
+
+    for ad in ads:
+
+        ad_id = ad[0]
+        link = ad[2]
+        target = ad[3]
+        current = ad[4]
+
+        code = AdsManager.generate_code(
+            message.from_user.id,
+            ad_id
+        )
+
+        verify_url = (
+            f"https://t.me/{VERIFY_BOT}"
+            f"?start={code}"
+        )
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="📢 Join Channel",
+                        url=f"https://t.me/{link.replace('@','')}"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="✅ Verify Join",
+                        url=verify_url
+                    )
+                ]
+            ]
+        )
+
+        remaining = target - current
+
+        text = (
+            "📢 <b>Channel Advertisement</b>\n\n"
+
+            f"🔗 {link}\n\n"
+
+            f"💰 Reward : <b>0.27 Birr</b>\n"
+
+            f"👥 Progress : <b>{current}/{target}</b>\n"
+
+            f"⌛ Remaining : <b>{remaining}</b>\n\n"
+
+            "1️⃣ Join the channel.\n"
+            "2️⃣ Click Verify Join.\n"
+            "3️⃣ Verification Bot will reward you automatically."
+        )
+
+        await message.answer(
+            text,
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
+from aiogram import Router, F
+from aiogram.types import Message
+from aiogram.filters import CommandStart
+from aiogram.fsm.context import FSMContext
+
+from ads_manager import AdsManager
+
+verify_router = Router()
+
+
+@verify_router.message(CommandStart())
+async def verification_start(
+    message: Message,
+    state: FSMContext
+):
+
+    args = message.text.split(maxsplit=1)
+
+    if len(args) < 2:
+
+        return await message.answer(
+            "❌ Verification code not found."
+        )
+
+    code = args[1]
+
+    result = AdsManager.verify(code)
+
+    if result is None:
+
+        return await message.answer(
+            "❌ Invalid or expired verification code."
+        )
+
+    complete = AdsManager.complete_campaign(
+        user_id=message.from_user.id,
+        ad_id=result["ad_id"]
+    )
+
+    if not complete["success"]:
+
+        return await message.answer(
+            complete["message"]
+        )
+
+    info = AdsManager.campaign_info(
+        result["ad_id"]
+    )
+
+    remaining = (
+        info["target"] -
+        info["current"]
+    )
+
+    await message.answer(
+
+        "🎉 <b>Verification Successful</b>\n\n"
+
+        "✅ Task Completed Successfully.\n\n"
+
+        "💰 Reward Added : <b>0.27 Birr</b>\n"
+
+        f"👥 Campaign Progress : {info['current']}/{info['target']}\n"
+
+        f"⌛ Remaining : {remaining}",
+
+        parse_mode="HTML"
+
+    )
+
+    if remaining <= 0:
+
+        AdsManager.finish_campaign(
+            result["ad_id"]
+        )
+
+        owner = info["owner"]
+
+        try:
+
+            await message.bot.send_message(
+
+                owner,
+
+                "🎉 Your advertisement has been completed.\n\n"
+
+                f"👥 Target : {info['target']}\n"
+
+                "✅ Campaign Closed Automatically."
+
+            )
+
+        except Exception:
+            pass
