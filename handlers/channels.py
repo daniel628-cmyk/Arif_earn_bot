@@ -155,3 +155,29 @@ async def verify_channel(message: Message):
                 )
             except Exception:
                 pass
+from aiogram.exceptions import TelegramBadRequest
+
+
+async def check_channel_membership(bot, channel_username, user_id):
+
+    try:
+
+        member = await bot.get_chat_member(
+            chat_id=channel_username,
+            user_id=user_id
+        )
+
+        if member.status in (
+            "member",
+            "administrator",
+            "creator",
+        ):
+            return True
+
+        return False
+
+    except TelegramBadRequest:
+        return False
+
+    except Exception:
+        return False
