@@ -1,10 +1,15 @@
 from db import (
     get_db,
     get_balance,
-    add_earned_balance,
-    deduct_deposit_balance,
+    add_earned,
+    remove_deposit,
+    has_completed,
+    complete_ad,
+    increase_progress,
+    create_verification_code,
+    verify_code,
+    close_ad,
 )
-
 REWARD = 0.27
 
 
@@ -28,7 +33,7 @@ class AdsManager:
                 "message": "Insufficient deposit balance."
             }
 
-        deduct_deposit_balance(
+        remove_deposit(
             user_id,
             total_price
         )
