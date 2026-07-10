@@ -63,7 +63,7 @@ def init_db():
 
                     current_count INTEGER DEFAULT 0,
 
-                    reward DOUBLE PRECISION DEFAULT 0.5,
+                    reward DOUBLE PRECISION DEFAULT 0.27,
 
                     total_price DOUBLE PRECISION,
 
@@ -612,7 +612,7 @@ def remove_earned(user_id, amount):
 def create_ad(user_id, link, ad_type, target_count):
     """
     Create a new advertisement.
-    Reward = 0.5 Birr per completed task.
+    Reward = 0.27 Birr per completed task.
     Minimum target = 10 users.
     """
 
@@ -622,7 +622,7 @@ def create_ad(user_id, link, ad_type, target_count):
             "message": "Minimum target is 10."
         }
 
-    reward = 0.5
+    reward = 0.27
     total_price = reward * target_count
 
     conn = get_db()
