@@ -10,6 +10,7 @@ from db import (
     verify_code,
     close_ad,
 )
+
 REWARD = 0.27
 
 
@@ -104,14 +105,6 @@ class AdsManager:
         finally:
 
             conn.close()
-from db import (
-    get_db,
-    close_ad,
-)
-
-
-class AdsManagerAdsManager:
-
     @staticmethod
     def active_channels():
 
@@ -133,6 +126,7 @@ class AdsManagerAdsManager:
                     WHERE
                         type='channel'
                         AND is_active=TRUE
+                        AND status='active'
                     ORDER BY id ASC
                 """)
 
@@ -141,6 +135,7 @@ class AdsManagerAdsManager:
         finally:
 
             conn.close()
+
 
     @staticmethod
     def active_bots():
@@ -163,6 +158,7 @@ class AdsManagerAdsManager:
                     WHERE
                         type='bot'
                         AND is_active=TRUE
+                        AND status='active'
                     ORDER BY id ASC
                 """)
 
@@ -171,6 +167,7 @@ class AdsManagerAdsManager:
         finally:
 
             conn.close()
+
 
     @staticmethod
     def my_ads(user_id):
@@ -202,6 +199,7 @@ class AdsManagerAdsManager:
         finally:
 
             conn.close()
+
 
     @staticmethod
     def campaign_info(ad_id):
@@ -251,7 +249,6 @@ class AdsManagerAdsManager:
         finally:
 
             conn.close()
-
     @staticmethod
     def delete_campaign(ad_id):
 
@@ -274,38 +271,31 @@ class AdsManagerAdsManager:
 
             conn.close()
 
+
     @staticmethod
     def finish_campaign(ad_id):
 
         close_ad(ad_id)
 
         return True
-from db import (
-    get_db,
-    has_completed,
-    complete_ad,
-    increase_progress,
-    add_earned,
-    create_verification_code,
-    verify_code,
-)
 
-
-class AdsManagerAdsManager:
 
     @staticmethod
-    def generate_code(user_id: int, ad_id: int):
+    def generate_code(
+        user_id: int,
+        ad_id: int
+    ):
 
         return create_verification_code(
             user_id=user_id,
             ad_id=ad_id
         )
 
+
     @staticmethod
     def verify(code: str):
 
         return verify_code(code)
-
     @staticmethod
     def complete_campaign(
         user_id: int,
@@ -314,23 +304,21 @@ class AdsManagerAdsManager:
 
         # Already completed?
         if has_completed(user_id, ad_id):
-
             return {
                 "success": False,
                 "message": "You already completed this advertisement."
             }
 
+        # Campaign info
         info = AdsManager.campaign_info(ad_id)
 
         if info is None:
-
             return {
                 "success": False,
                 "message": "Advertisement not found."
             }
 
         if not info["is_active"]:
-
             return {
                 "success": False,
                 "message": "Advertisement is already closed."
@@ -350,10 +338,10 @@ class AdsManagerAdsManager:
             amount=reward
         )
 
-        # Increase progress
+        # Increase campaign progress
         increase_progress(ad_id)
 
-        # Reload campaign
+        # Reload campaign info
         info = AdsManager.campaign_info(ad_id)
 
         completed = False
@@ -365,21 +353,13 @@ class AdsManagerAdsManager:
             completed = True
 
         return {
-
             "success": True,
-
             "reward": reward,
-
             "completed": completed,
-
             "current": info["current"],
-
             "target": info["target"],
-
             "message": f"{reward:.2f} Birr added successfully."
-
         }
-
     @staticmethod
     def total_active():
 
@@ -388,7 +368,49 @@ class AdsManagerAdsManager:
             len(AdsManager.active_bots())
         )
 
+
     @staticmethod
     def campaign_exists(ad_id):
 
         return AdsManager.campaign_info(ad_id) is not None
+
+
+    @staticmethod
+    def total_channels():
+
+        return len(
+            AdsManager.active_channels()
+        )
+
+
+    @staticmethod
+    def total_bots():
+
+        return len(
+            AdsManager.active_bots()
+        )
+
+
+    @staticmethod
+    def campaign_progress(ad_id):
+
+        info = AdsManager.campaign_info(ad_id)
+
+        if info is None:
+            return None
+
+        return {
+            "current": info["current"],
+            "target": info["target"],
+            "remaining": max(
+                0,
+                info["target"] - info["current"]
+            ),
+            "completed": info["current"] >= info["target"]
+        }
+
+
+    @staticmethod
+    def reward_amount():
+
+        return REWARD
