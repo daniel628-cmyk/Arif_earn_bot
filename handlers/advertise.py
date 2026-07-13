@@ -146,7 +146,7 @@ async def process_target(message: Message, state: FSMContext, bot: Bot):
         return
 
     # Create the ad
-    result = AdsManager.create_ad(
+    result = AdsManager.create_campaign(
         user_id=user_id,
         link=data['link'],
         target_count=target,
