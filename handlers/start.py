@@ -1,30 +1,61 @@
 from aiogram import Router
-from aiogram.types import Message
-from aiogram.filters import Command
+from aiogram.filters import CommandStart
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+
 from db import add_user
 
 router = Router()
 
-@router.message(Command("start"))
-async def start_handler(message: Message):
-    user_id = message.from_user.id
-    username = message.from_user.username
-    first_name = message.from_user.first_name
 
-    add_user(user_id, username, first_name)
+def main_menu():
 
-    await message.answer(
-        "👋 Welcome to **Arif Earn Bot**!\n\n"
-        "Earn money by joining channels, bots, and referring friends.\n"
-        "Use the menu below:",
-        reply_markup=get_main_kb()
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text="📢 Join Channels"),
+                KeyboardButton(text="🤖 Join Bots"),
+            ],
+            [
+                KeyboardButton(text="💰 Balance"),
+                KeyboardButton(text="📣 Advertise"),
+            ],
+            [
+                KeyboardButton(text="👥 Referrals"),
+                KeyboardButton(text="💸 Withdraw"),
+            ],
+            [
+                KeyboardButton(text="ℹ️ Info"),
+            ],
+        ],
+        resize_keyboard=True
     )
 
-def get_main_kb():
-    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-    return ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text="📢 Join Channels"), KeyboardButton(text="🤖 Join Bots")],
-        [KeyboardButton(text="💰 Balance"), KeyboardButton(text="💸 Withdraw")],
-        [KeyboardButton(text="📣 Advertise"), KeyboardButton(text="👥 Referrals")],
-        [KeyboardButton(text="ℹ️ Info")]
-    ], resize_keyboard=True)
+
+@router.message(CommandStart())
+async def start(message: Message):
+
+    add_user(
+        message.from_user.id,
+        message.from_user.username,
+        message.from_user.first_name
+    )
+
+    text = f"""
+👋 Welcome, <b>{message.from_user.first_name}</b>
+
+💸 <b>ARIF EARNING BOT</b>
+
+Earn Birr by:
+
+📢 Joining Channels
+🤖 Joining Bots
+👥 Referring Friends
+
+Choose an option below.
+"""
+
+    await message.answer(
+        text,
+        parse_mode="HTML",
+        reply_markup=main_menu()
+    )
