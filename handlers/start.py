@@ -59,3 +59,39 @@ Choose an option below.
         parse_mode="HTML",
         reply_markup=main_menu()
     )
+@router.message(Command("menu"))
+async def menu_handler(message: Message):
+    await message.answer(
+        "🏠 Main Menu",
+        reply_markup=get_main_kb()
+    )
+
+
+@router.message(Command("help"))
+async def help_handler(message: Message):
+    await message.answer(
+        """
+📖 <b>How to use Arif Earn Bot</b>
+
+1️⃣ Join Channels
+• Complete channel tasks
+• Earn Birr
+
+2️⃣ Join Bots
+• Start promoted bots
+• Earn Birr
+
+3️⃣ Advertise
+• Promote your Channel
+• Promote your Bot
+
+4️⃣ Withdraw
+• Withdraw your earnings
+
+5️⃣ Referrals
+• Invite friends
+• Earn referral rewards
+""",
+        parse_mode="HTML",
+        reply_markup=get_main_kb()
+    )
